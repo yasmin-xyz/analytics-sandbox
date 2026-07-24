@@ -71,30 +71,51 @@ function medianOf(values: number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// Inverse of rawImpliedProbability — turns a consensus probability back
+// into a representative American-odds quote for display/prompt purposes.
+function americanOddsFromProbability(p: number): number {
+  return p >= 0.5 ? Math.round((-100 * p) / (1 - p)) : Math.round((100 * (1 - p)) / p);
 }
 
 // bookmakers[0] is an arbitrary, display-order-dependent pick (and shifts
 // whenever reorderBookmakers() swaps display positions around) — the
 // median price across every book actually quoting this fight is a far more
 // honest "market odds" than whichever one happens to sort first.
+//
+// Medians run in PROBABILITY space, not raw American-odds space. American
+// odds are discontinuous at the favorite/underdog line (there's no valid
+// value between -100 and +100) — in a near-pick'em fight where books split
+// on who's favored, medianing the raw numbers can straddle that gap and
+// land on a nonsense quote like -2 (implying ~2% instead of ~50%).
+// Probability doesn't have that discontinuity, so it medians safely.
 function medianMarketOdds(
   bookmakers: any[] | null | undefined,
   fighterAOutcomeName: string | null | undefined,
   fighterBOutcomeName: string | null | undefined
 ): { oddsA: number | null; oddsB: number | null } {
-  const pricesA: number[] = [];
-  const pricesB: number[] = [];
+  const probsA: number[] = [];
+  const probsB: number[] = [];
 
   for (const bookmaker of bookmakers || []) {
     const outcomes = bookmaker?.markets?.[0]?.outcomes || [];
     const priceA = outcomes.find((o: any) => o.name === fighterAOutcomeName)?.price;
     const priceB = outcomes.find((o: any) => o.name === fighterBOutcomeName)?.price;
-    if (typeof priceA === "number") pricesA.push(priceA);
-    if (typeof priceB === "number") pricesB.push(priceB);
+    const probA = rawImpliedProbability(priceA);
+    const probB = rawImpliedProbability(priceB);
+    if (probA !== null) probsA.push(probA);
+    if (probB !== null) probsB.push(probB);
   }
 
-  return { oddsA: medianOf(pricesA), oddsB: medianOf(pricesB) };
+  const medianProbA = medianOf(probsA);
+  const medianProbB = medianOf(probsB);
+
+  return {
+    oddsA: medianProbA !== null ? americanOddsFromProbability(medianProbA) : null,
+    oddsB: medianProbB !== null ? americanOddsFromProbability(medianProbB) : null,
+  };
 }
 
 type MarketGapTier =

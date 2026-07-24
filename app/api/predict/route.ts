@@ -30,13 +30,19 @@ const google = new GoogleGenAI({
 
 const supabase = supabaseAdmin;
 
-// Conservative starting point for the highest-cost route in the app (each
-// uncached request fans out to three paid LLM providers). Cached fight_key
-// reads never reach this check. Tune from real traffic once deployed.
+// Highest-cost route in the app (each uncached request fans out to three
+// paid LLM providers). Cached fight_key reads never reach this check, so
+// this only bounds first-generation cost, not every page view — but the
+// original 5/10-min limit was tuned too conservative: a single visitor
+// browsing a normal ~19-fight card (main + prelims + early prelims) could
+// blow through it in one sitting on nothing but legitimate clicks, well
+// before hitting anything that looks like abuse. Loosened to give a real
+// user room to browse a full card; still bounded well below what a script
+// hammering the route would need to do real cost damage.
 const SHORT_WINDOW_SECONDS = 10 * 60;
-const SHORT_WINDOW_LIMIT = 5;
+const SHORT_WINDOW_LIMIT = 15;
 const DAILY_WINDOW_SECONDS = 24 * 60 * 60;
-const DAILY_WINDOW_LIMIT = 20;
+const DAILY_WINDOW_LIMIT = 40;
 
 const MAX_BODY_BYTES = 20_000;
 const PROVIDER_TIMEOUT_MS = 25_000;
@@ -187,8 +193,12 @@ function validatePredictBody(raw: unknown) {
 // from bookmakers[0] (arbitrary, and display-order-dependent since
 // mergeFightData.ts started reordering bookmakers) to a median price
 // across all books — old rows may have been generated off a single
-// outlier line.
-const PREDICTION_VERSION = "v8-median-odds";
+// outlier line. v9 fixes that median to run in probability space instead
+// of raw American-odds space — in a near-pick'em fight where books split
+// on who's favored, medianing raw odds numbers can straddle the invalid
+// -100..+100 gap and land on a nonsense quote (e.g. -2, implying ~2%
+// instead of ~50%).
+const PREDICTION_VERSION = "v9-probability-median";
 
 function createFightKey(fighterA: string, fighterB: string) {
   const matchup = [fighterA, fighterB].sort().join(" vs ");
