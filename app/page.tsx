@@ -343,6 +343,7 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
           fighterB: fight.fighterB,
           oddsA: homeOdds?.price || 0,
           oddsB: awayOdds?.price || 0,
+          eventName: ufcEvent?.eventName || null,
 
           fighterAStats: fighterAStatsArg,
           fighterBStats: fighterBStatsArg,
@@ -1496,6 +1497,7 @@ const statRows = [
                 <span className="odds-col-label">{shortName(selectedFight?.fighterA, "Fighter A")}</span>
                 <span className="odds-col-label">{shortName(selectedFight?.fighterB, "Fighter B")}</span>
               </div>
+              <div className="odds-scroll">
               {loadingOdds ? (
   Array.from({ length: 4 }).map((_, i) => (
     <div key={i} className="skeleton-odds-book">
@@ -1526,6 +1528,7 @@ const statRows = [
 ) : (
   <div className="ai-loading">Odds are temporarily unavailable — check back shortly</div>
 )}
+              </div>
               {oddsTimestampLabel && (
                 <div
                   className="odds-footer"

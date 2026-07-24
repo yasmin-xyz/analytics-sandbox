@@ -31,7 +31,12 @@ export async function fetchOddsFromProvider(): Promise<OddsProviderResult> {
   const response = await axios.get(ODDS_API_URL, {
     params: {
       apiKey: process.env.ODDS_API_KEY,
-      regions: "us",
+      // "us_ex" is the-odds-api's exchange/prediction-market bucket —
+      // adds Kalshi, Polymarket, Novig, and ProphetX. bet365 was checked
+      // (across us, us2, uk, us_ex, eu, au) and simply isn't offered by
+      // this provider for MMA in any region, so there's no region param
+      // that would surface it.
+      regions: "us,us_ex",
       markets: "h2h",
       oddsFormat: "american",
     },

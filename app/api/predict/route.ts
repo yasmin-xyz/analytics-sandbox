@@ -74,6 +74,7 @@ const TOP_LEVEL_FIELDS = [
   "fighterB",
   "oddsA",
   "oddsB",
+  "eventName",
   "fighterAMetricsSource",
   "fighterBMetricsSource",
   "fighterAStats",
@@ -90,6 +91,13 @@ function validateStatsObject(value: unknown, label: string): Record<string, unkn
     assertLooseScalar(obj[field], `${label}.${field}`, field === "headshot" || field === "flag" ? 500 : 300);
   }
   return obj;
+}
+
+function validateOptionalString(value: unknown, label: string, maxLength: number): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string") throw new ValidationError(`${label} must be a string`);
+  if (value.length > maxLength) throw new ValidationError(`${label} exceeds max length of ${maxLength}`);
+  return value;
 }
 
 function validateMetricsObject(value: unknown, label: string): Record<string, unknown> | undefined {
@@ -117,6 +125,7 @@ function validatePredictBody(raw: unknown) {
   const oddsB = assertFiniteNumber(body.oddsB, "oddsB");
   const fighterAMetricsSource = assertRequiredString(body.fighterAMetricsSource, "fighterAMetricsSource", 150);
   const fighterBMetricsSource = assertRequiredString(body.fighterBMetricsSource, "fighterBMetricsSource", 150);
+  const eventName = validateOptionalString(body.eventName, "eventName", 200);
 
   const fighterAStats = validateStatsObject(body.fighterAStats, "fighterAStats");
   const fighterBStats = validateStatsObject(body.fighterBStats, "fighterBStats");
@@ -128,6 +137,7 @@ function validatePredictBody(raw: unknown) {
     fighterB,
     oddsA,
     oddsB,
+    eventName,
     fighterAMetricsSource,
     fighterBMetricsSource,
     fighterAStats,
@@ -344,7 +354,7 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    const { fighterA, fighterB, oddsA, oddsB } = body;
+    const { fighterA, fighterB, oddsA, oddsB, eventName } = body;
 
     const validationErrors = validateFighterData(body);
 
@@ -570,6 +580,7 @@ export async function POST(request: Request) {
           fight_key: fightKey,
           fighter_a: fighterA,
           fighter_b: fighterB,
+          event_name: eventName,
           prediction: finalPrediction,
         },
         {

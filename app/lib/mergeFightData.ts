@@ -37,6 +37,31 @@ function surname(normalizedName: string): string {
   return parts[parts.length - 1] || "";
 }
 
+// The-odds-api returns bookmakers in whatever order it feels like, which
+// shifted once Kalshi/Polymarket/etc. were added (see oddsProvider.ts).
+// Rather than inventing a full "most popular" ranking, this just swaps
+// two specific pairs to their requested positions — whatever order the
+// rest of the list happens to be in is left untouched.
+const BOOKMAKER_SWAPS: [string, string][] = [
+  ["betonlineag", "kalshi"],
+  ["betus", "betmgm"],
+];
+
+function reorderBookmakers(bookmakers: any[]): any[] {
+  const arr = [...bookmakers];
+
+  for (const [a, b] of BOOKMAKER_SWAPS) {
+    const indexA = arr.findIndex((bm) => bm.key === a);
+    const indexB = arr.findIndex((bm) => bm.key === b);
+
+    if (indexA !== -1 && indexB !== -1) {
+      [arr[indexA], arr[indexB]] = [arr[indexB], arr[indexA]];
+    }
+  }
+
+  return arr;
+}
+
 export function mergeFightData(
     espnFights: any[],
     oddsFights: any[]
@@ -124,7 +149,14 @@ export function mergeFightData(
 
       return {
         ...fight,
-        odds: oddsMatch ? { ...oddsMatch, fighterAOutcomeName, fighterBOutcomeName } : null,
+        odds: oddsMatch
+          ? {
+              ...oddsMatch,
+              bookmakers: reorderBookmakers(oddsMatch.bookmakers || []),
+              fighterAOutcomeName,
+              fighterBOutcomeName,
+            }
+          : null,
       };
     });
   }

@@ -86,22 +86,48 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A sync is already in progress" }, { status: 409 });
   }
 
+  // Optional explicit fighter list — for backfilling a specific (usually
+  // already-concluded) card whose fighters fetchCurrentUfcEvent() no
+  // longer returns. `force` skips the cache-freshness check below, since
+  // a fighter's metrics/history row from days ago isn't "stale" by the
+  // normal 30-day window even though a real fight happened in that time.
+  let explicitNames: string[] | null = null;
+  let force = false;
   try {
-    const event = await fetchCurrentUfcEvent();
+    const body = await request.json();
+    if (Array.isArray(body?.fighterNames) && body.fighterNames.every((n: unknown) => typeof n === "string")) {
+      explicitNames = body.fighterNames;
+      force = body.force === true;
+    }
+  } catch {
+    // No/invalid JSON body — fall through to the current-event behavior.
+  }
 
-    if (!event) {
-      return NextResponse.json({ error: "No current UFC event found" }, { status: 404 });
+  try {
+    let eventNameForLog = "manual fighter list";
+    let uniqueNames: string[];
+
+    if (explicitNames) {
+      uniqueNames = [...new Set(explicitNames)];
+    } else {
+      const event = await fetchCurrentUfcEvent();
+
+      if (!event) {
+        return NextResponse.json({ error: "No current UFC event found" }, { status: 404 });
+      }
+
+      const names = new Set<string>();
+      for (const fight of event.fights) {
+        if (fight.fighterA) names.add(fight.fighterA);
+        if (fight.fighterB) names.add(fight.fighterB);
+      }
+
+      uniqueNames = [...names];
+      eventNameForLog = event.eventName;
     }
 
-    const names = new Set<string>();
-    for (const fight of event.fights) {
-      if (fight.fighterA) names.add(fight.fighterA);
-      if (fight.fighterB) names.add(fight.fighterB);
-    }
-
-    const uniqueNames = [...names];
     console.log(
-      `[admin/fighter-sync] event "${event.eventName}" — ${uniqueNames.length} unique fighters found`
+      `[admin/fighter-sync] event "${eventNameForLog}" — ${uniqueNames.length} unique fighters found${force ? " (force)" : ""}`
     );
 
     resetCitoCallCount();
@@ -123,6 +149,7 @@ export async function POST(request: Request) {
       const historyPeek = await peekFighterHistory(metricsPeek.providerSlug);
 
       const bothFresh =
+        !force &&
         metricsPeek.status === "cached" &&
         !metricsPeek.needsRefresh &&
         historyPeek.status === "cached" &&
@@ -175,7 +202,7 @@ export async function POST(request: Request) {
     );
 
     return NextResponse.json({
-      eventName: event.eventName,
+      eventName: eventNameForLog,
       totalFighters: uniqueNames.length,
       cacheHits,
       fightersSynced,
