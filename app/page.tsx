@@ -5,6 +5,7 @@ import { mergeFightData } from "./lib/mergeFightData";
 import { namesMatchExactly } from "./lib/fighterName";
 import InfoTooltip from "./components/InfoTooltip";
 import ConfidenceMeter from "./components/ConfidenceMeter";
+import Countdown from "./components/Countdown";
 import FightSelect from "./components/FightSelect";
 import { useRevealOnScroll } from "./lib/useRevealOnScroll";
 
@@ -186,13 +187,6 @@ function shortName(fullName: string | undefined, fallback = "Fighter") {
   return last;
 }
 
-function shortEventDate(dateStr: string | undefined | null) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
-
 // Cito's `result` field isn't limited to "win"/"loss" — draws and no
 // contests are real MMA outcomes, not just missing data. Treating
 // anything non-"win" as a loss (the previous logic) silently mislabels
@@ -324,6 +318,8 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
     fighterBStatsArg: any,
     fighterAMetricsArg: any,
     fighterBMetricsArg: any,
+    fighterAHistoryArg: any[],
+    fighterBHistoryArg: any[],
     requestId: number
   ) {
     if (!fight) return;
@@ -350,6 +346,16 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
 
           fighterAMetrics: fighterAMetricsArg,
           fighterBMetrics: fighterBMetricsArg,
+
+          // Picked down to exactly what the server's validator allows —
+          // the raw history objects may carry extra fields it doesn't
+          // know about.
+          fighterAHistory: (fighterAHistoryArg || []).slice(0, 5).map((f: any) => ({
+            opponent: f.opponent, result: f.result, method: f.method, round: f.round, time: f.time, event: f.event, date: f.date,
+          })),
+          fighterBHistory: (fighterBHistoryArg || []).slice(0, 5).map((f: any) => ({
+            opponent: f.opponent, result: f.result, method: f.method, round: f.round, time: f.time, event: f.event, date: f.date,
+          })),
 
           // Explicit source tags so the server can verify these metrics
           // objects actually belong to the fighters named above, instead
@@ -439,8 +445,10 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
 
       const metricsA = metricsData?.metrics?.[fight.fighterA] || {};
       const metricsB = metricsData?.metrics?.[fight.fighterB] || {};
+      const historyA = metricsData?.history?.[fight.fighterA] || [];
+      const historyB = metricsData?.history?.[fight.fighterB] || [];
 
-      await fetchPrediction(fight, statsA, statsB, metricsA, metricsB, requestId);
+      await fetchPrediction(fight, statsA, statsB, metricsA, metricsB, historyA, historyB, requestId);
     } catch (error) {
       console.error("Failed to load prediction inputs:", error);
 
@@ -1000,15 +1008,6 @@ const statRows = [
       </div>
       <div className="about-disclaimer">Informational analysis only. Outcomes are never guaranteed.</div>
     </InfoTooltip>
-    {ufcEvent && (
-      <span className="nav-badge" id="event-badge">
-        {ufcEvent.completed
-          ? ufcEvent.nextEvent
-            ? `Next event: ${shortEventDate(ufcEvent.nextEvent.date)}`
-            : "Upcoming"
-          : shortEventDate(selectedFight?.date) || shortEventDate(ufcEvent?.date) || "Upcoming"}
-      </span>
-    )}
   </div>
 </nav>
 
@@ -1018,36 +1017,39 @@ const statRows = [
   {ufcEvent ? (
     <>
       <span className="event-name event-fade-in">{ufcEvent.eventName}</span>
-      <span className="event-date event-fade-in">
-        {ufcEvent.completed ? (
-          ufcEvent.nextEvent ? (
-            <>
-              Check back closer to {new Date(ufcEvent.nextEvent.date).toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-              })}{" "}for {ufcEvent.nextEvent.name}
-            </>
+      <span className="event-date-line event-fade-in">
+        <span className="event-date">
+          {ufcEvent.completed ? (
+            ufcEvent.nextEvent ? (
+              <>
+                Check back closer to {new Date(ufcEvent.nextEvent.date).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                })}{" "}for {ufcEvent.nextEvent.name}
+              </>
+            ) : (
+              "Check back soon for the next event"
+            )
           ) : (
-            "Check back soon for the next event"
-          )
-        ) : (
-          <>
-            {selectedFight?.date
-              ? new Date(selectedFight.date).toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : ufcEvent.date
-              ? new Date(ufcEvent.date).toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : ""}
-            {eventVenue && ` · ${eventVenue}`}
-            {eventLocation && ` · ${eventLocation}`}
-          </>
+            <>
+              {ufcEvent.date
+                ? new Date(ufcEvent.date).toLocaleDateString("en-US", {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : ""}
+              {eventVenue && ` · ${eventVenue}`}
+              {eventLocation && ` · ${eventLocation}`}
+            </>
+          )}
+        </span>
+        {!ufcEvent.completed && (
+          // The event's own start time, not the currently-selected fight's
+          // (main-card bouts get a distinct, later time from ESPN than the
+          // event's nominal start — this bar is about the event, and
+          // shouldn't jump around as the fight dropdown changes).
+          <Countdown targetDate={ufcEvent.date} className="event-countdown" />
         )}
       </span>
     </>
@@ -1400,23 +1402,23 @@ const statRows = [
             <div>
               <div className="cons-eyebrow">Winner</div>
               <div className="prediction-headline-val">
-                {prediction.claude?.predictedWinner || "—"}
+                {prediction.consensus?.winner || "—"}
               </div>
             </div>
 
             <div className="prediction-headline-right">
               <div className="cons-eyebrow">Confidence</div>
               <div className="prediction-headline-val">
-                {prediction.claude?.confidence || "—"}%
+                {prediction.consensus?.confidence || "—"}%
               </div>
-              {typeof prediction.claude?.confidence === "number" && (
+              {typeof prediction.consensus?.confidence === "number" && (
                 <>
                   <div className="confidence-tier-label">
-                    {confidenceTier(prediction.claude.confidence)} confidence
+                    {confidenceTier(prediction.consensus.confidence)} confidence
                   </div>
                   <ConfidenceMeter
-                    value={prediction.claude.confidence}
-                    tierLabel={confidenceTier(prediction.claude.confidence)}
+                    value={prediction.consensus.confidence}
+                    tierLabel={confidenceTier(prediction.consensus.confidence)}
                     play={confidenceVisible}
                   />
                 </>
@@ -1431,7 +1433,12 @@ const statRows = [
             </div>
 
             <div className="value-card prediction-round">
-              <div className="cons-eyebrow">Round</div>
+              <div className="cons-eyebrow-row">
+                <div className="cons-eyebrow">Round</div>
+                <InfoTooltip label="Round" width={230}>
+                  How far the models expect this fight to go — not a calibrated probability.
+                </InfoTooltip>
+              </div>
               <div className="pred-name">
   {formatPredictedRound(
     prediction?.claude?.method,
@@ -1439,6 +1446,24 @@ const statRows = [
   )}
 </div>
             </div>
+
+            {prediction?.consensus?.overUnder && (
+              <>
+                <div className="value-card prediction-ou">
+                  <div className="cons-eyebrow">Over 1.5 Rds</div>
+                  <div className={`pred-name overunder-${prediction.consensus.overUnder.over1_5.label.toLowerCase()}`}>
+                    {prediction.consensus.overUnder.over1_5.label}
+                  </div>
+                </div>
+
+                <div className="value-card prediction-ou">
+                  <div className="cons-eyebrow">Over 2.5 Rds</div>
+                  <div className={`pred-name overunder-${prediction.consensus.overUnder.over2_5.label.toLowerCase()}`}>
+                    {prediction.consensus.overUnder.over2_5.label}
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="value-card prediction-lean">
               <div className="cons-eyebrow">Betting Lean</div>

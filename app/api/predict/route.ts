@@ -58,6 +58,9 @@ const STATS_FIELDS = [
   "flag",
 ];
 
+const HISTORY_FIELDS = ["opponent", "result", "method", "round", "time", "event", "date"];
+const MAX_HISTORY_ITEMS = 5;
+
 const METRICS_FIELDS = [
   "slpm",
   "strAcc",
@@ -81,6 +84,8 @@ const TOP_LEVEL_FIELDS = [
   "fighterBStats",
   "fighterAMetrics",
   "fighterBMetrics",
+  "fighterAHistory",
+  "fighterBHistory",
 ];
 
 function validateStatsObject(value: unknown, label: string): Record<string, unknown> | undefined {
@@ -98,6 +103,24 @@ function validateOptionalString(value: unknown, label: string, maxLength: number
   if (typeof value !== "string") throw new ValidationError(`${label} must be a string`);
   if (value.length > maxLength) throw new ValidationError(`${label} exceeds max length of ${maxLength}`);
   return value;
+}
+
+// Only the most recent fights matter for "how does this fighter usually
+// win/lose" — capped at MAX_HISTORY_ITEMS regardless of how many the
+// client sends, both to bound prompt size and because older fights are
+// weaker signal for current finishing tendency anyway.
+function validateHistoryArray(value: unknown, label: string): Record<string, unknown>[] | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!Array.isArray(value)) throw new ValidationError(`${label} must be an array`);
+
+  return value.slice(0, MAX_HISTORY_ITEMS).map((item, i) => {
+    const obj = assertPlainObject(item, `${label}[${i}]`);
+    assertKnownKeys(obj, HISTORY_FIELDS, `${label}[${i}]`);
+    for (const field of HISTORY_FIELDS) {
+      assertLooseScalar(obj[field], `${label}[${i}].${field}`, 150);
+    }
+    return obj;
+  });
 }
 
 function validateMetricsObject(value: unknown, label: string): Record<string, unknown> | undefined {
@@ -131,6 +154,8 @@ function validatePredictBody(raw: unknown) {
   const fighterBStats = validateStatsObject(body.fighterBStats, "fighterBStats");
   const fighterAMetrics = validateMetricsObject(body.fighterAMetrics, "fighterAMetrics");
   const fighterBMetrics = validateMetricsObject(body.fighterBMetrics, "fighterBMetrics");
+  const fighterAHistory = validateHistoryArray(body.fighterAHistory, "fighterAHistory");
+  const fighterBHistory = validateHistoryArray(body.fighterBHistory, "fighterBHistory");
 
   return {
     fighterA,
@@ -138,6 +163,8 @@ function validatePredictBody(raw: unknown) {
     oddsA,
     oddsB,
     eventName,
+    fighterAHistory,
+    fighterBHistory,
     fighterAMetricsSource,
     fighterBMetricsSource,
     fighterAStats,
@@ -155,7 +182,9 @@ function validatePredictBody(raw: unknown) {
 // odds only matched by surname (given names differ between ESPN and the
 // odds API, e.g. "Steve"/"Stephen") had its per-fighter price lookup fail
 // before mergeFightData.ts started resolving the outcome name explicitly.
-const PREDICTION_VERSION = "v6-outcome-name-fix";
+// v7 adds recent fight history to the prompt and predictedFinishRound/
+// over-under consensus — old rows have neither.
+const PREDICTION_VERSION = "v7-history-and-rounds";
 
 function createFightKey(fighterA: string, fighterB: string) {
   const matchup = [fighterA, fighterB].sort().join(" vs ");
@@ -174,6 +203,24 @@ function rawImpliedProbability(odds: number | null | undefined): number | null {
 
 function cleanJson(text: string) {
   return text.replace(/```json\n?|\n?```/g, "").trim();
+}
+
+const VALID_FINISH_ROUNDS = new Set(["1", "2", "3", "4", "5", "Decision"]);
+
+// A model can return "Round 2", "R2", "2nd", etc. despite the prompt's
+// instruction — coerce common variants rather than silently defaulting
+// them all to "Decision", which would quietly bias every over/under
+// consensus toward "goes the distance".
+function normalizeFinishRound(value: unknown): string {
+  if (typeof value !== "string") return "Decision";
+
+  const trimmed = value.trim();
+  if (VALID_FINISH_ROUNDS.has(trimmed)) return trimmed;
+
+  const digitMatch = trimmed.match(/[1-5]/);
+  if (digitMatch && /decision/i.test(trimmed) === false) return digitMatch[0];
+
+  return "Decision";
 }
 
 function normalizePrediction(analysis: any, fighterA: string, fighterB: string, oddsA: number, oddsB: number) {
@@ -200,6 +247,7 @@ function normalizePrediction(analysis: any, fighterA: string, fighterB: string, 
       analysis.pick ||
       fallbackWinner,
     confidence: analysis.confidence || 50,
+    predictedFinishRound: normalizeFinishRound(analysis.predictedFinishRound),
   };
 }
 
@@ -241,6 +289,26 @@ function validateFighterData(body: any): string[] {
   return errors;
 }
 
+// Career-average metrics (SLpM, TD accuracy, etc.) say nothing about HOW
+// a fighter's individual fights actually ended — a fighter with three
+// straight first-round finishes and one with three decisions can share
+// identical averages. This renders the actual per-fight record so the
+// model can reason about real finishing tendency instead of guessing
+// from age/record/style alone.
+function formatHistoryForPrompt(history: Record<string, unknown>[] | undefined): string {
+  if (!history || history.length === 0) return "  No recent fight history available.";
+
+  return history
+    .map((fight) => {
+      const result = typeof fight.result === "string" ? fight.result.toUpperCase() : "?";
+      const opponent = fight.opponent || "Unknown opponent";
+      const method = fight.method || "Unknown method";
+      const round = fight.round ? `, Round ${fight.round}` : "";
+      return `  - ${result} vs ${opponent} — ${method}${round}`;
+    })
+    .join("\n");
+}
+
 function buildPrompt({
   fighterA,
   fighterB,
@@ -250,6 +318,8 @@ function buildPrompt({
   fighterBStats,
   fighterAMetrics,
   fighterBMetrics,
+  fighterAHistory,
+  fighterBHistory,
 }: any) {
   const impliedA = rawImpliedProbability(oddsA);
   const impliedB = rawImpliedProbability(oddsB);
@@ -308,12 +378,22 @@ ${fighterB}
 - TD Defense: ${fighterBMetrics?.tdDef || "Unknown"}
 - Submission Avg: ${fighterBMetrics?.subAvg || "Unknown"}
 
+Recent Fight History (most recent first — career averages above don't show
+HOW a fighter's individual fights actually ended; use this for finishing
+tendency):
+
+${fighterA}
+${formatHistoryForPrompt(fighterAHistory)}
+
+${fighterB}
+${formatHistoryForPrompt(fighterBHistory)}
+
 Consider:
 - advanced performance metrics
 - styles and matchup dynamics
 - reach and physical advantages
 - age and experience
-- finishing ability
+- finishing ability, using the recent fight history above as real evidence of it — not just the style label
 - likely path to victory
 
 If you pick the fighter the market considers a substantial underdog (implied win probability meaningfully below 50%), you must:
@@ -328,6 +408,7 @@ Return ONLY valid JSON in this format:
   "confidence": 72,
   "method": "",
   "round": "",
+  "predictedFinishRound": "Your single best estimate of when this fight actually ends. Must be exactly one of: \\"1\\", \\"2\\", \\"3\\", \\"4\\", \\"5\\", or \\"Decision\\".",
   "bettingLean": "",
   "keyAdvantages": "2 sentences, maximum. The single most important statistical or stylistic advantage, stated plainly.",
   "biggestRisk": "1-2 sentences, maximum. The single biggest risk to this prediction.",
@@ -339,6 +420,36 @@ Return ONLY valid JSON in this format:
 }
 
 Be concise. Readers do not want to read long paragraphs — every sentence must earn its place. State the point directly with no throat-clearing or repetition across fields.`;
+}
+
+// "Over 2.5 rounds" implies "over 1.5 rounds" — a fight that goes to a
+// decision (or ends in round 3+) necessarily also cleared round 1. This
+// derives both from the single predictedFinishRound value rather than
+// asking the model to judge each threshold independently, which could
+// otherwise produce a self-contradictory pair (e.g. "unlikely over 1.5"
+// but "likely over 2.5").
+function clearsRoundThreshold(finishRound: string, roundsToClear: number): boolean {
+  if (finishRound === "Decision") return true;
+  return parseInt(finishRound, 10) > roundsToClear;
+}
+
+// Mirrors the winner-consensus pattern: majority vote across whichever
+// models succeeded, "Uncertain" only on a genuine tie (only reachable
+// when a model failed and the remaining two disagree).
+function overUnderConsensus(
+  modelResults: { name: string; prediction: any }[],
+  roundsToClear: number
+): { label: "Likely" | "Unlikely" | "Uncertain"; agreeingModels: string[] } {
+  const over = modelResults.filter(({ prediction }) => clearsRoundThreshold(prediction.predictedFinishRound, roundsToClear));
+  const under = modelResults.filter(({ prediction }) => !clearsRoundThreshold(prediction.predictedFinishRound, roundsToClear));
+
+  if (over.length > under.length) {
+    return { label: "Likely", agreeingModels: over.map((m) => m.name) };
+  }
+  if (under.length > over.length) {
+    return { label: "Unlikely", agreeingModels: under.map((m) => m.name) };
+  }
+  return { label: "Uncertain", agreeingModels: [] };
 }
 
 export async function POST(request: Request) {
@@ -560,6 +671,17 @@ export async function POST(request: Request) {
           : "Majority";
     }
 
+    const overUnder =
+      totalSuccessfulModels === 0
+        ? {
+            over1_5: { label: "Uncertain" as const, agreeingModels: [] },
+            over2_5: { label: "Uncertain" as const, agreeingModels: [] },
+          }
+        : {
+            over1_5: overUnderConsensus(modelResults, 1),
+            over2_5: overUnderConsensus(modelResults, 2),
+          };
+
     const finalPrediction = {
       claude,
       gpt,
@@ -570,6 +692,7 @@ export async function POST(request: Request) {
         agreeingModels,
         totalSuccessfulModels,
         modelAgreement,
+        overUnder,
       },
     };
 
