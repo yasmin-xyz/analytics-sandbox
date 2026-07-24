@@ -110,7 +110,6 @@ body {
 
 .nav-links { display: flex; align-items: center; gap: 28px; }
 .nav-link { font-size: 13px; color: rgba(255,255,255,0.28); cursor: default; }
-.nav-badge { font-size: 11px; background: rgba(98, 55, 176, 0.12); color: var(--accent-muted); border: 0.5px solid rgba(98, 55, 176, 0.25); padding: 4px 12px; border-radius: 20px; }
 
 /* NAV RIGHT */
 .nav-right {
@@ -332,7 +331,14 @@ body {
 @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(98, 55, 176, 0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 5px rgba(98, 55, 176, 0); } }
 .event-eyebrow { font-size: 10px; color: rgba(255,255,255,0.28); text-transform: uppercase; letter-spacing: 0.1em; }
 .event-name { font-size: 13px; font-weight: 500; color: #E8E8EC; }
-.event-date { font-size: 12px; color: rgba(255,255,255,0.4); margin-left: auto; }
+
+/* The single flex item that fills the rest of the bar after the name —
+   growing to fill that space (rather than shrink-wrapping its content)
+   is what lets the countdown's margin-left: auto push all the way to
+   the bar's real right edge instead of just this wrapper's own edge. */
+.event-date-line { display: flex; align-items: baseline; flex: 1; min-width: 0; gap: 10px; }
+.event-date { font-size: 12px; color: rgba(255,255,255,0.4); }
+.event-countdown { font-size: 11px; color: var(--accent-muted); font-weight: 600; margin-left: auto; white-space: nowrap; }
 
 /* A concluded event isn't "live" — still the dot, drop the pulse, and
    mute the name slightly so the bar reads as settled/past rather than
@@ -350,6 +356,12 @@ body {
 }
 .event-bar-concluded .event-date {
   color: var(--accent-muted);
+}
+/* No countdown sits alongside this state to claim the far-right slot,
+   so the date/message reclaims it instead of trailing right after the
+   name. */
+.event-bar-concluded .event-date-line {
+  justify-content: flex-end;
 }
 
 /* Reserve the same footprint as the real text so there's no layout shift
@@ -1140,12 +1152,6 @@ body {
     display: none;
   }
 
-  .nav-badge {
-    padding: 8px 12px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
   /* Event information */
 
   .event-bar {
@@ -1169,11 +1175,29 @@ body {
     line-height: 1.35;
   }
 
+  /* The wrapper (not each piece separately) is the grid item here, so
+     the date and countdown inside it just flow inline together on the
+     same line rather than each claiming their own grid row. Spans the
+     full width (not just the column-2-onward indent under the name)
+     and never wraps — that's the room a long countdown needs to always
+     fit on one line instead of dropping to a second. */
+  .event-date-line {
+    grid-column: 1 / -1;
+    flex: initial;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+
   .event-date {
-    grid-column: 2 / -1;
-    margin-left: 0;
     font-size: 12px;
     line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .event-countdown {
+    font-size: 10px;
+    margin-left: 0;
   }
 
   .event-skeleton-name {
@@ -1294,6 +1318,13 @@ body {
     font-size: 20px;
     line-height: 1.15;
     overflow-wrap: anywhere;
+    /* Reserves space for 2 lines regardless of whether this specific
+       name actually wraps — a long name (e.g. "Wellington Turman")
+       wrapping to 2 lines while the opponent's stays on 1 would
+       otherwise push that fighter's nickname/record down out of
+       alignment with the other side's. em-based so it still reserves
+       exactly 2 lines at the smaller font-size below 430px. */
+    min-height: calc(1.15em * 2);
   }
 
   .fighter-record {
@@ -1477,7 +1508,7 @@ body {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 28px;
-  margin-top: 28px;
+  margin-top: 36px;
 }
 
 /* The flex gap on .value-card is the single source of label-to-value
@@ -1487,12 +1518,10 @@ body {
   margin-bottom: 0;
 }
 
-.prediction-method {
+.prediction-method,
+.prediction-round,
+.prediction-ou {
   grid-column: span 3;
-}
-
-.prediction-round {
-  grid-column: span 4;
 }
 
 .prediction-lean {
@@ -1504,6 +1533,23 @@ body {
   line-height: 1.5;
 }
 
+/* Lets the Round field's InfoTooltip trigger sit inline with its label
+   without disturbing the label-to-value spacing every other field in
+   this grid relies on (see the .cons-eyebrow margin cancel above). */
+.cons-eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cons-eyebrow-row .cons-eyebrow {
+  margin-bottom: 0;
+}
+
+.overunder-likely { color: var(--accent-muted); }
+.overunder-unlikely { color: rgba(255, 255, 255, 0.5); }
+.overunder-uncertain { color: rgba(255, 255, 255, 0.32); }
+
 @media (max-width: 768px) {
   .prediction-details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1512,7 +1558,8 @@ body {
   }
 
   .prediction-method,
-  .prediction-round {
+  .prediction-round,
+  .prediction-ou {
     grid-column: span 1;
   }
 
@@ -1645,7 +1692,7 @@ body {
 .confidence-rail-scale {
   display: flex;
   justify-content: space-between;
-  margin-top: 7px;
+  margin-top: 4px;
   font-size: 8px;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.32);
