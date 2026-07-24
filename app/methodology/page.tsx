@@ -48,10 +48,11 @@ export default function MethodologyPage() {
               <div>
                 <div className="meth-step-title">Fighter data is collected</div>
                 <p className="meth-step-body">
-                  Career records, physical attributes, and detailed fight
-                  statistics are sourced from publicly available UFC data. This
-                  includes striking accuracy, takedown rates, submission
-                  attempts, and finish percentages.
+                  Career records, physical attributes, detailed fight
+                  statistics, and recent fight-by-fight results are sourced
+                  from the Cito API and Sherdog. This includes striking
+                  accuracy, takedown rates, submission attempts, and finish
+                  percentages.
                 </p>
               </div>
             </li>
@@ -60,10 +61,12 @@ export default function MethodologyPage() {
               <div>
                 <div className="meth-step-title">Sportsbook odds are fetched</div>
                 <p className="meth-step-body">
-                  Live moneyline odds are pulled from multiple major sportsbooks
-                  via The Odds API. These are converted into implied
-                  probabilities to represent what the betting market currently
-                  believes about each fighter&apos;s chances of winning.
+                  Live moneyline odds are pulled from every major sportsbook
+                  available via The Odds API — typically 8-11 books per fight.
+                  Rather than relying on any single book&apos;s line, the market
+                  probability shown is the median across all of them, so one
+                  outlier price can&apos;t skew the picture. Implied probabilities
+                  are derived from that consensus price.
                 </p>
               </div>
             </li>
@@ -73,10 +76,11 @@ export default function MethodologyPage() {
                 <div className="meth-step-title">AI models analyse the matchup</div>
                 <p className="meth-step-body">
                   Three AI models — Claude, GPT-4, and Gemini — independently
-                  evaluate the matchup using fighter statistics and odds context.
-                  Each model produces a predicted winner, a confidence score,
-                  and a structured breakdown covering key advantages, risks, and
-                  a likely fight script.
+                  evaluate the matchup using fighter statistics, each
+                  fighter&apos;s recent fight-by-fight results, and odds context.
+                  Each model produces a predicted winner, a confidence score, a
+                  predicted method and round, and a structured breakdown
+                  covering key advantages, risks, and a likely fight script.
                 </p>
               </div>
             </li>
@@ -150,17 +154,26 @@ export default function MethodologyPage() {
         <section className="meth-section">
           <h2 className="meth-heading">Data sources</h2>
           <p className="meth-body">
-            Pick&apos;em Labs currently draws from two primary data sources.
+            Pick&apos;em Labs currently draws from three primary data sources.
           </p>
           <div className="meth-source-list">
             <div className="meth-source">
               <div className="meth-source-label">Fighter statistics</div>
               <p className="meth-source-body">
-                Career and per-fight metrics are sourced from publicly available
-                UFC statistical data. This includes significant strike rates,
-                accuracy, takedown data, submission attempts, and win/loss
-                records. Statistics reflect career averages and may not capture
-                very recent fights until data is updated.
+                Career and per-fight metrics are sourced from the Cito API and
+                Sherdog. This includes significant strike rates, accuracy,
+                takedown data, submission attempts, and win/loss records.
+                Statistics reflect career averages and may not capture very
+                recent fights until data is updated.
+              </p>
+            </div>
+            <div className="meth-source">
+              <div className="meth-source-label">Recent fight history</div>
+              <p className="meth-source-body">
+                Each fighter&apos;s most recent completed UFC bouts — opponent,
+                result, method, and round — are pulled from the same sources
+                and included alongside career stats, so the AI models have
+                fight-by-fight context, not just career averages.
               </p>
             </div>
             <div className="meth-source">
@@ -168,9 +181,9 @@ export default function MethodologyPage() {
               <p className="meth-source-body">
                 Moneyline odds are fetched in real time from The Odds API,
                 which aggregates lines from multiple major sportsbooks. Odds
-                are displayed in American format. Implied probabilities are
-                calculated from these odds and used as an input to the AI
-                analysis prompt.
+                are displayed in American format. A median implied probability
+                across all available books is calculated and used as an input
+                to the AI analysis prompt.
               </p>
             </div>
           </div>
@@ -188,7 +201,7 @@ export default function MethodologyPage() {
             the data it was provided.
           </p>
           <p className="meth-body">
-            The consensus confidence shown in the Multi-Model Consensus panel
+            The consensus confidence shown in the Model Consensus panel
             is the arithmetic average of the three individual model scores. It
             is not a probability of the predicted fighter winning — it is a
             measure of how certain the models are collectively in their pick.
@@ -206,16 +219,20 @@ export default function MethodologyPage() {
         <section className="meth-section">
           <h2 className="meth-heading">AI vs market</h2>
           <p className="meth-body">
-            The Value Analysis panel compares the AI consensus win probability
-            against the market-implied probability derived from sportsbook odds.
-            The difference between these two numbers is displayed as a value
-            edge.
+            The AI vs. Market panel compares the AI consensus confidence
+            against the market-implied probability derived from sportsbook
+            odds. The difference between these two numbers is displayed as the
+            AI–Market Gap.
           </p>
           <p className="meth-body">
-            A positive value edge means the AI models collectively assign a
-            higher win probability to a fighter than the market does. A
-            negative value edge means the market is more confident in that
-            fighter than the AI models are.
+            A positive gap means the AI models collectively assign a higher
+            win probability to a fighter than the market does. A negative gap
+            means the market is more confident in that fighter than the AI
+            models are. The gap is also labeled with a tier — from
+            &quot;Market-aligned&quot; to &quot;High-risk contrarian
+            pick&quot; — based on how big an underdog the AI&apos;s pick is
+            per the market; a large enough gap on a genuine underdog is
+            flagged with a Contrarian pick badge.
           </p>
           <p className="meth-body">
             This comparison is informational. It is intended to surface
@@ -247,10 +264,11 @@ export default function MethodologyPage() {
               may not be reflected in its analysis.
             </li>
             <li className="meth-limitation">
-              <span className="meth-limitation-label">No fight-by-fight granularity</span>
-              The current data layer uses aggregate career statistics rather
-              than round-by-round or fight-by-fight breakdowns. Stylistic
-              trends that have emerged recently may not be captured.
+              <span className="meth-limitation-label">No round-by-round granularity</span>
+              Each fighter&apos;s recent fights are included at the result level
+              (opponent, method, round, time) — not round-by-round strike or
+              grappling breakdowns. Career stat comparisons still rely on
+              aggregate averages, not fight-by-fight splits.
             </li>
             <li className="meth-limitation">
               <span className="meth-limitation-label">Model variability</span>
