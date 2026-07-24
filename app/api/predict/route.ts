@@ -183,8 +183,12 @@ function validatePredictBody(raw: unknown) {
 // odds API, e.g. "Steve"/"Stephen") had its per-fighter price lookup fail
 // before mergeFightData.ts started resolving the outcome name explicitly.
 // v7 adds recent fight history to the prompt and predictedFinishRound/
-// over-under consensus — old rows have neither.
-const PREDICTION_VERSION = "v7-history-and-rounds";
+// over-under consensus — old rows have neither. v8 switches oddsA/oddsB
+// from bookmakers[0] (arbitrary, and display-order-dependent since
+// mergeFightData.ts started reordering bookmakers) to a median price
+// across all books — old rows may have been generated off a single
+// outlier line.
+const PREDICTION_VERSION = "v8-median-odds";
 
 function createFightKey(fighterA: string, fighterB: string) {
   const matchup = [fighterA, fighterB].sort().join(" vs ");

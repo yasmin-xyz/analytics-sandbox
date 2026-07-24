@@ -757,11 +757,28 @@ body {
    provider returns (this list has grown over time as exchanges like
    Kalshi/Polymarket were added) — keeps the right column's height
    predictable instead of it growing every time a bookmaker is added. */
+/* Mobile Safari/Chrome run overlay scrollbars that fade out after
+   inactivity regardless of ::-webkit-scrollbar styling — there's no CSS
+   that can force a native scrollbar to stay visible on touch devices. This
+   "scroll shadow" trick is the reliable cross-browser substitute: two
+   gradients scroll WITH the content (background-attachment: local) to mask
+   the shadow once you've scrolled past it, while two more stay fixed
+   (background-attachment: scroll) so a shadow only shows on the edge that
+   still has more content to reveal — no JS required. */
 .odds-scroll {
   max-height: 320px;
   overflow-y: auto;
   margin-right: -6px;
   padding-right: 6px;
+  background:
+    linear-gradient(var(--surface) 30%, rgba(22, 22, 26, 0)) 0 0,
+    linear-gradient(rgba(22, 22, 26, 0), var(--surface) 70%) 0 100%,
+    radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0)) 0 0,
+    radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0)) 0 100%;
+  background-repeat: no-repeat;
+  background-color: var(--surface);
+  background-size: 100% 24px, 100% 24px, 100% 10px, 100% 10px;
+  background-attachment: local, local, scroll, scroll;
 }
 
 .odds-scroll::-webkit-scrollbar {

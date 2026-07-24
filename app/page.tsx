@@ -67,6 +67,36 @@ function normalizedImpliedProbabilities(
   };
 }
 
+function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+// bookmakers[0] is an arbitrary, display-order-dependent pick (and shifts
+// whenever reorderBookmakers() swaps display positions around) — the
+// median price across every book actually quoting this fight is a far more
+// honest "market odds" than whichever one happens to sort first.
+function medianMarketOdds(
+  bookmakers: any[] | null | undefined,
+  fighterAOutcomeName: string | null | undefined,
+  fighterBOutcomeName: string | null | undefined
+): { oddsA: number | null; oddsB: number | null } {
+  const pricesA: number[] = [];
+  const pricesB: number[] = [];
+
+  for (const bookmaker of bookmakers || []) {
+    const outcomes = bookmaker?.markets?.[0]?.outcomes || [];
+    const priceA = outcomes.find((o: any) => o.name === fighterAOutcomeName)?.price;
+    const priceB = outcomes.find((o: any) => o.name === fighterBOutcomeName)?.price;
+    if (typeof priceA === "number") pricesA.push(priceA);
+    if (typeof priceB === "number") pricesB.push(priceB);
+  }
+
+  return { oddsA: medianOf(pricesA), oddsB: medianOf(pricesB) };
+}
+
 type MarketGapTier =
   | "Market-aligned"
   | "Slight contrarian lean"
@@ -325,10 +355,11 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
     if (!fight) return;
     if (requestId !== requestIdRef.current) return;
 
-    const bookmaker = fight.odds?.bookmakers?.[0];
-    const outcomes = bookmaker?.markets?.[0]?.outcomes || [];
-    const homeOdds = outcomes.find((o: any) => o.name === fight.odds?.fighterAOutcomeName);
-    const awayOdds = outcomes.find((o: any) => o.name === fight.odds?.fighterBOutcomeName);
+    const { oddsA: medianOddsA, oddsB: medianOddsB } = medianMarketOdds(
+      fight.odds?.bookmakers,
+      fight.odds?.fighterAOutcomeName,
+      fight.odds?.fighterBOutcomeName
+    );
 
     try {
       const res = await fetch("/api/predict", {
@@ -337,8 +368,8 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
         body: JSON.stringify({
           fighterA: fight.fighterA,
           fighterB: fight.fighterB,
-          oddsA: homeOdds?.price || 0,
-          oddsB: awayOdds?.price || 0,
+          oddsA: medianOddsA || 0,
+          oddsB: medianOddsB || 0,
           eventName: ufcEvent?.eventName || null,
 
           fighterAStats: fighterAStatsArg,
@@ -831,11 +862,12 @@ selectFight(defaultFight);
         selectFight(firstFight);
       }
 
-  const firstBookmaker = selectedFight?.odds?.bookmakers?.[0];
-  const outcomes = firstBookmaker?.markets?.[0]?.outcomes || [];
-  const homeOdds = outcomes.find((o: any) => o.name === selectedFight?.odds?.fighterAOutcomeName);
-  const awayOdds = outcomes.find((o: any) => o.name === selectedFight?.odds?.fighterBOutcomeName);
-  const { a: homeImplied, b: awayImplied } = normalizedImpliedProbabilities(homeOdds?.price, awayOdds?.price);
+  const { oddsA: medianDisplayOddsA, oddsB: medianDisplayOddsB } = medianMarketOdds(
+    selectedFight?.odds?.bookmakers,
+    selectedFight?.odds?.fighterAOutcomeName,
+    selectedFight?.odds?.fighterBOutcomeName
+  );
+  const { a: homeImplied, b: awayImplied } = normalizedImpliedProbabilities(medianDisplayOddsA, medianDisplayOddsB);
 
   // Which fighter did the consensus actually pick? Never assume fighterA —
   // compare against both names explicitly so the AI-market comparison
