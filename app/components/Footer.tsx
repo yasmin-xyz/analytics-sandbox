@@ -22,14 +22,13 @@ export default function Footer() {
           <div className="footer-brand">
             <div className="footer-brand-name">
               <FooterWordmark />
-              <span className="footer-parent">a PickMeLabs company</span>
             </div>
             <p className="footer-desc">
               AI-powered UFC fight analysis that combines advanced fighter data,
               sportsbook odds, and multiple AI models to help you make more
               informed predictions.
             </p>
-            <p className="footer-copyright">© 2026 PickMeLabs</p>
+            <p className="footer-copyright">© 2026 Pick'em Labs</p>
           </div>
 
           {/* Right */}
