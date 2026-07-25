@@ -16,6 +16,11 @@ interface DropdownProps<T> {
   onSelect: (option: DropdownOption<T>) => void;
   placeholder?: string;
   ariaLabel: string;
+  // Extra class on the portaled panel — for callers that need to scope
+  // styling (e.g. font size) to one particular Dropdown instance, since
+  // the panel is portaled to document.body and isn't reachable via a
+  // normal descendant selector from the trigger's own wrapper.
+  panelClassName?: string;
 }
 
 const VIEWPORT_MARGIN = 12;
@@ -40,6 +45,7 @@ export default function Dropdown<T>({
   onSelect,
   placeholder = "Select an option",
   ariaLabel,
+  panelClassName,
 }: DropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -182,7 +188,7 @@ export default function Dropdown<T>({
             id={listboxId}
             role="listbox"
             aria-label={ariaLabel}
-            className={`dropdown-panel ${open ? "dropdown-panel-open" : ""}`}
+            className={`dropdown-panel ${panelClassName || ""} ${open ? "dropdown-panel-open" : ""}`}
             style={{ top: coords.top, left: coords.left, width: coords.width }}
           >
             {options.map((option, index) => {

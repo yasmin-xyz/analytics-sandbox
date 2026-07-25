@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { mergeFightData } from "./lib/mergeFightData";
 import { namesMatchExactly } from "./lib/fighterName";
 import InfoTooltip from "./components/InfoTooltip";
+import ExpertChat from "./components/ExpertChat";
 import ConfidenceMeter from "./components/ConfidenceMeter";
 import Countdown from "./components/Countdown";
 import FightSelect from "./components/FightSelect";
@@ -1061,12 +1062,27 @@ const statRows = [
       </div>
       <div className="about-disclaimer">Informational analysis only. Outcomes are never guaranteed.</div>
     </InfoTooltip>
+    <ExpertChat
+      fights={mergedFights}
+      selectedFight={selectedFight}
+      onSelectFight={selectFight}
+      marketOddsA={medianDisplayOddsA}
+      marketOddsB={medianDisplayOddsB}
+      marketProbA={homeImplied}
+      marketProbB={awayImplied}
+    />
   </div>
 </nav>
 
-<div className={`event-bar reveal-event-bar ${ufcEvent?.completed ? "event-bar-concluded" : ""}`}>
+<div
+  className={`event-bar reveal-event-bar ${ufcEvent?.completed ? "event-bar-concluded" : ""} ${
+    ufcEvent?.isLive ? "event-bar-live" : ""
+  }`}
+>
   <div className="event-dot"></div>
-  <span className="event-eyebrow">{ufcEvent?.completed ? "Event Concluded" : "Next Event"}</span>
+  <span className="event-eyebrow">
+    {ufcEvent?.completed ? "Event Concluded" : ufcEvent?.isLive ? "Live Now" : "Next Event"}
+  </span>
   {ufcEvent ? (
     <>
       <span className="event-name event-fade-in">{ufcEvent.eventName}</span>
@@ -1097,7 +1113,13 @@ const statRows = [
             </>
           )}
         </span>
-        {!ufcEvent.completed && (
+        {!ufcEvent.completed && ufcEvent.isLive && (
+          <span className="event-live-badge">
+            <span className="event-live-dot" />
+            LIVE
+          </span>
+        )}
+        {!ufcEvent.completed && !ufcEvent.isLive && (
           // The event's own start time, not the currently-selected fight's
           // (main-card bouts get a distinct, later time from ESPN than the
           // event's nominal start — this bar is about the event, and

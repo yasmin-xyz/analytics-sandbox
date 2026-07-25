@@ -27,6 +27,11 @@ export type UfcEvent = {
   venue: string;
   fights: UfcEventFight[];
   completed: boolean;
+  // ESPN's own status.type.state ("pre" | "in" | "post") — a direct signal
+  // rather than inferring "in progress" from the event's start time having
+  // passed, which would be wrong for however long ESPN takes to flip
+  // `completed` after the actual last fight ends.
+  isLive: boolean;
   // The next scheduled event after this one, per ESPN's own forward
   // calendar — never hardcoded, since the schedule shifts. null if this
   // event isn't completed, or if it couldn't be found in the calendar
@@ -88,6 +93,7 @@ async function fetchCurrentUfcEventUncached(): Promise<UfcEvent | null> {
   });
 
   const completed = event.status?.type?.completed === true;
+  const isLive = event.status?.type?.state === "in";
   const nextEvent = completed
     ? findNextEvent(data.leagues?.[0]?.calendar, event.name)
     : null;
@@ -99,6 +105,7 @@ async function fetchCurrentUfcEventUncached(): Promise<UfcEvent | null> {
     venue: event.competitions?.[0]?.venue?.fullName || "Venue TBD",
     fights,
     completed,
+    isLive,
     nextEvent,
   };
 }

@@ -310,6 +310,370 @@ body {
   pointer-events: none;
 }
 
+/* ASK THE EXPERT — nav trigger + slide-over chat panel. Sits above the
+   InfoTooltip/Dropdown panels (both z-index: 300) since it can legitimately
+   be open at the same time either of those is triggered from elsewhere on
+   the page. */
+.nav-chat-btn {
+  position: relative;
+  background: var(--accent-soft);
+  border: 0.5px solid var(--accent-border);
+  color: var(--accent-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.nav-chat-btn:hover {
+  background: rgba(101, 95, 223, 0.2);
+  border-color: var(--accent-muted);
+}
+
+.nav-chat-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.nav-chat-btn[aria-expanded="true"] {
+  background: rgba(101, 95, 223, 0.28);
+  border-color: var(--accent-muted);
+}
+
+/* Small speech-bubble tail hanging off the trigger when the panel is open
+   — a lightweight visual thread connecting the pill to the panel below it,
+   since they're not adjacent in the DOM (the panel is portaled). */
+.nav-chat-btn[aria-expanded="true"]::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  right: 18px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid var(--accent-muted);
+}
+
+/* Deliberately a different surface from the rest of the app's near-black
+   cards — a faint indigo-tinted gradient plus a very light outward glow so
+   the panel reads as its own distinct "AI" surface rather than another
+   content card, without overpowering the rest of the UI. The glow lives
+   only on the -open variant: box-shadow isn't clipped by the panel's own
+   translateX() when closed (the shadow's blur radius extends further than
+   the translate distance), so keeping it on the base class left a sliver
+   of glow visible at the screen edge at all times.
+
+   A floating, bounded-height widget on desktop (reads as a chat bot, not
+   a full-page feature) — full-screen only below 480px, where there's no
+   room for a floating card and a widget-style sheet would just get in the
+   way. See the max-width: 480px override below. */
+/* Grows out of the "Ask the Expert" pill rather than sliding in from the
+   screen edge — transform-origin: top right anchors the scale to roughly
+   where the trigger sits, so it reads as the panel *coming from* the
+   button, not an unrelated sheet arriving from off-canvas. Kept in normal
+   flow (not translated off-screen) while closed, so pointer-events: none
+   has to do the job translateX used to do for free. */
+.expert-chat-panel {
+  position: fixed;
+  top: 66px;
+  right: 20px;
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  height: 420px;
+  max-height: calc(100vh - 90px);
+  border-radius: 16px;
+  background: linear-gradient(165deg, #19172A 0%, #141224 55%, #100E1D 100%);
+  border: 1px solid rgba(101, 95, 223, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform-origin: top right;
+  transform: scale(0.85);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.16s ease;
+  z-index: 400;
+}
+
+.expert-chat-panel-open {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), 0 0 24px rgba(101, 95, 223, 0.08);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expert-chat-panel {
+    transition: opacity 0.16s ease;
+    transform: none;
+  }
+}
+
+.expert-chat-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 16px 12px;
+  border-bottom: 0.5px solid rgba(178, 163, 255, 0.12);
+  flex-shrink: 0;
+}
+
+/* Sits at the top of the transcript now, not the header — see the header
+   comment below for why the header needed the room instead. */
+.expert-chat-disclaimer {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.expert-chat-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.expert-chat-picker-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent-muted);
+}
+
+/* The fight picker now sits on its own row under the label (see the
+   header-row above) — full width, since it no longer has to share the row
+   with the close button. */
+.expert-chat-fight-picker {
+  width: 100%;
+}
+
+.expert-chat-fight-picker .dropdown-trigger {
+  min-height: 30px;
+  padding: 0 28px 0 10px;
+  font-size: 11px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(178, 163, 255, 0.25);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.expert-chat-fight-picker .dropdown-wrap::after {
+  right: 12px;
+  width: 6px;
+  height: 6px;
+}
+
+/* Portaled to document.body (see Dropdown.tsx), so it's not reachable via
+   a descendant selector from .expert-chat-fight-picker — scoped instead
+   via the panelClassName passed through FightSelect -> Dropdown. Matches
+   the trigger's 11px rather than the shared .dropdown-option default
+   (14px, sized for the main page's full-size selector). */
+.expert-chat-dropdown-panel .dropdown-option {
+  font-size: 11px;
+}
+
+.expert-chat-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.expert-chat-close:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.expert-chat-transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.expert-chat-message {
+  display: flex;
+  flex-direction: column;
+}
+
+.expert-chat-message-user {
+  align-items: flex-end;
+}
+
+.expert-chat-message-assistant {
+  align-items: flex-start;
+}
+
+.expert-chat-bubble {
+  max-width: 85%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.expert-chat-bubble-user {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+.expert-chat-bubble-assistant {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+.expert-chat-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.expert-chat-loading-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.expert-chat-loading-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent-muted);
+  animation: expertChatDotBounce 1.1s ease-in-out infinite;
+}
+
+.expert-chat-loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.expert-chat-loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes expertChatDotBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .expert-chat-loading-dots span {
+    animation: none;
+  }
+}
+
+.expert-chat-error {
+  font-size: 11px;
+  color: var(--red);
+  padding: 4px 2px;
+}
+
+.expert-chat-redirect {
+  display: block;
+  margin: 6px 0 0;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(178, 163, 255, 0.3);
+  background: rgba(101, 95, 223, 0.12);
+  color: var(--accent-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.expert-chat-redirect:hover {
+  background: rgba(101, 95, 223, 0.22);
+  border-color: var(--accent-muted);
+}
+
+.expert-chat-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.expert-chat-input {
+  flex: 1;
+  resize: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 8px 10px;
+  max-height: 100px;
+}
+
+.expert-chat-input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.expert-chat-send {
+  background: var(--accent-primary);
+  border: none;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.expert-chat-send:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  /* Deliberately not redeclaring `transform`/`opacity` here — those live
+     on .expert-chat-panel-open (defined earlier in the cascade, same
+     specificity), which needs to win when open. A source-order-later rule
+     on the base class would silently beat it, leaving the panel stuck
+     invisible even after "opening" on mobile (this exact bug happened
+     once already, back when the closed state used translateX instead of
+     scale/opacity — same root cause either way). */
+  .expert-chat-panel {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+    border-width: 0 0 0 1px;
+  }
+}
+
 /* Groups a section title with its info button so the button sits
    immediately beside the text instead of at the far edge of the header. */
 .card-title-group {
@@ -362,6 +726,51 @@ body {
    name. */
 .event-bar-concluded .event-date-line {
   justify-content: flex-end;
+}
+
+/* An event mid-broadcast — distinct red rather than the app's purple
+   accent, since this is the one state that's genuinely urgent/time-
+   sensitive rather than informational. */
+.event-bar-live .event-dot {
+  background: var(--red);
+  animation: liveDotPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes liveDotPulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(220, 80, 80, 0.5); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 5px rgba(220, 80, 80, 0); }
+}
+
+.event-bar-live .event-eyebrow {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.event-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--red);
+  white-space: nowrap;
+}
+
+.event-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: liveDotPulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-bar-live .event-dot,
+  .event-live-dot {
+    animation: none;
+  }
 }
 
 /* Reserve the same footprint as the real text so there's no layout shift
@@ -1974,7 +2383,10 @@ body {
   border: 1px solid rgba(98, 55, 176, 0.3);
   border-radius: 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
-  z-index: 300;
+  /* Above .expert-chat-panel (400) — the fight picker embedded in the chat
+     header needs its own listbox to render on top of the chat panel it's
+     nested in, not underneath it. */
+  z-index: 450;
   opacity: 0;
   transform: translateY(-4px) scale(0.98);
   transform-origin: top center;
