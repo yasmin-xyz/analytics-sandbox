@@ -232,13 +232,15 @@ export default function ExpertChat({
                 </div>
               ))}
               {loading && (
-                <div className="expert-chat-bubble expert-chat-bubble-assistant expert-chat-loading">
-                  <span>{THINKING_MESSAGES[thinkingIndex]}</span>
-                  <span className="expert-chat-loading-dots">
-                    <span />
-                    <span />
-                    <span />
-                  </span>
+                <div className="expert-chat-message expert-chat-message-assistant">
+                  <div className="expert-chat-bubble expert-chat-bubble-assistant expert-chat-loading">
+                    <span>{THINKING_MESSAGES[thinkingIndex]}</span>
+                    <span className="expert-chat-loading-dots">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                  </div>
                 </div>
               )}
               {error && <div className="expert-chat-error">{error}</div>}
