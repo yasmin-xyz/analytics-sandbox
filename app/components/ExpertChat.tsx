@@ -198,12 +198,10 @@ export default function ExpertChat({
             className={`expert-chat-panel ${open ? "expert-chat-panel-open" : ""}`}
           >
             <div className="expert-chat-header">
-              <div className="expert-chat-header-row">
-                <span className="expert-chat-picker-label">Ask anything about this matchup:</span>
-                <button type="button" className="expert-chat-close" aria-label="Close chat" onClick={() => setOpen(false)}>
-                  ×
-                </button>
-              </div>
+              <button type="button" className="expert-chat-close" aria-label="Close chat" onClick={() => setOpen(false)}>
+                ×
+              </button>
+              <span className="expert-chat-picker-label">Ask anything about this matchup:</span>
               {fights.length > 0 && (
                 <div className="expert-chat-fight-picker">
                   <FightSelect

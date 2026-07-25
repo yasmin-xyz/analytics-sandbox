@@ -416,10 +416,11 @@ body {
 }
 
 .expert-chat-header {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 16px 12px;
+  padding: 8px 40px 12px 16px;
   border-bottom: 0.5px solid rgba(178, 163, 255, 0.12);
   flex-shrink: 0;
 }
@@ -435,17 +436,14 @@ body {
   margin-bottom: 4px;
 }
 
-.expert-chat-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
+/* Pinned to the header's own top-right corner rather than sharing a row
+   with the label — the label sits below it (margin-top) so the two never
+   read as a single aligned pair. */
 .expert-chat-picker-label {
   font-size: 11px;
   font-weight: 500;
   color: var(--accent-muted);
+  margin-top: 16px;
 }
 
 /* The fight picker now sits on its own row under the label (see the
@@ -455,6 +453,10 @@ body {
   width: 100%;
 }
 
+/* nowrap + ellipsis rather than relying on font-size alone to keep this
+   single-line — the longest fighter-name pairs (e.g. "Abubakar Vagaev vs.
+   Saygid Izagakhmaev") can still overflow a narrow trigger at any
+   reasonable size, and a wrapped second line looks broken here. */
 .expert-chat-fight-picker .dropdown-trigger {
   min-height: 30px;
   padding: 0 28px 0 10px;
@@ -463,6 +465,9 @@ body {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(178, 163, 255, 0.25);
   color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .expert-chat-fight-picker .dropdown-wrap::after {
@@ -481,6 +486,9 @@ body {
 }
 
 .expert-chat-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.4);
@@ -671,6 +679,79 @@ body {
     max-height: 100%;
     border-radius: 0;
     border-width: 0 0 0 1px;
+  }
+
+  /* A full-screen sheet reads differently than a floating desktop widget —
+     more breathing room from the top edge (the header otherwise sits right
+     against the device's status bar/notch) and slightly bigger type
+     throughout, since this is no longer a compact corner popover. */
+  .expert-chat-header {
+    padding: max(16px, env(safe-area-inset-top)) 44px 16px 20px;
+    gap: 10px;
+  }
+
+  .expert-chat-disclaimer {
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  /* Sits below the corner close button (margin-top), not beside it — the
+     two shouldn't read as an aligned pair. */
+  .expert-chat-picker-label {
+    font-size: 12.5px;
+    margin-top: 20px;
+  }
+
+  .expert-chat-fight-picker .dropdown-trigger {
+    min-height: 38px;
+    font-size: 12.5px;
+  }
+
+  .expert-chat-dropdown-panel .dropdown-option {
+    font-size: 12.5px;
+  }
+
+  .expert-chat-close {
+    top: max(12px, env(safe-area-inset-top));
+    right: 14px;
+    font-size: 24px;
+    padding: 4px 8px;
+  }
+
+  .expert-chat-transcript {
+    padding: 20px;
+    gap: 14px;
+  }
+
+  .expert-chat-bubble {
+    max-width: 88%;
+    padding: 10px 13px;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  .expert-chat-error {
+    font-size: 12px;
+  }
+
+  .expert-chat-redirect {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+
+  .expert-chat-input-row {
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .expert-chat-input {
+    font-size: 12.5px;
+    padding: 11px 14px;
+  }
+
+  .expert-chat-send {
+    font-size: 12px;
+    padding: 10px 16px;
   }
 }
 
@@ -1624,6 +1705,14 @@ body {
   .event-countdown {
     font-size: 10px;
     margin-left: 0;
+  }
+
+  /* The eyebrow already reads "LIVE NOW" up top on mobile — this second
+     LIVE badge (which otherwise fills the countdown's spot once the event
+     starts) is redundant here, even though it earns its place on desktop
+     next to the plainer "Live Now" eyebrow. */
+  .event-live-badge {
+    display: none;
   }
 
   .event-skeleton-name {
