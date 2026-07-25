@@ -744,8 +744,12 @@ body {
     gap: 10px;
   }
 
+  /* iOS Safari auto-zooms the whole page on focus for any text input under
+     16px — 16px is the smallest size that opts out, so this has to win
+     over the visual-consistency font size used elsewhere in the mobile
+     chat despite reading slightly larger than its neighbors. */
   .expert-chat-input {
-    font-size: 12.5px;
+    font-size: 16px;
     padding: 11px 14px;
   }
 
