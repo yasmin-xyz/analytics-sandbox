@@ -791,20 +791,29 @@ body {
 
 /* A concluded event isn't "live" — still the dot, drop the pulse, and
    mute the name slightly so the bar reads as settled/past rather than
-   competing with the forward-looking "check back" message. */
+   competing with the forward-looking "check back" message. Italic across
+   the whole line marks it as a different kind of message — a passive
+   status note rather than the live event details shown the rest of the
+   time. */
 .event-bar-concluded .event-dot {
   animation: none;
   background: rgba(255, 255, 255, 0.25);
 }
+/* A plain sky blue rather than the site's indigo accent — the concluded
+   state shouldn't read as just another shade of the same purple used
+   everywhere else. */
 .event-bar-concluded .event-eyebrow {
-  color: var(--accent-muted);
+  color: #2F7BD6;
   font-weight: 700;
+  font-style: italic;
 }
 .event-bar-concluded .event-name {
   color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
 }
 .event-bar-concluded .event-date {
-  color: var(--accent-muted);
+  color: #2F7BD6;
+  font-style: italic;
 }
 /* No countdown sits alongside this state to claim the far-right slot,
    so the date/message reclaims it instead of trailing right after the
@@ -1709,6 +1718,17 @@ body {
   .event-countdown {
     font-size: 10px;
     margin-left: 0;
+  }
+
+  /* Unlike the live/upcoming states, the concluded "check back" message
+     has no countdown sharing this line — so instead of forcing it onto
+     one (often overflowing) line, let it wrap onto a second. */
+  .event-bar-concluded .event-date-line {
+    flex-wrap: wrap;
+  }
+
+  .event-bar-concluded .event-date {
+    white-space: normal;
   }
 
   /* The eyebrow already reads "LIVE NOW" up top on mobile — this second
