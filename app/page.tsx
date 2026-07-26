@@ -1625,6 +1625,8 @@ const statRows = [
   <div className="ai-loading ai-loading-error">
     Live sportsbook odds are temporarily unavailable. Fighter metrics and AI predictions are unaffected.
   </div>
+) : ufcEvent?.completed ? (
+  <div className="ai-loading">Odds are unavailable since this event has concluded</div>
 ) : (
   <div className="ai-loading">Odds are temporarily unavailable — check back shortly</div>
 )}

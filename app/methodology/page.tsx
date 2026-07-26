@@ -73,7 +73,7 @@ export default function MethodologyPage() {
             <li className="meth-step">
               <span className="meth-step-num">03</span>
               <div>
-                <div className="meth-step-title">AI models analyse the matchup</div>
+                <div className="meth-step-title">AI models analyze the matchup</div>
                 <p className="meth-step-body">
                   Three AI models — Claude, GPT-4, and Gemini — independently
                   evaluate the matchup using fighter statistics, each
@@ -107,7 +107,7 @@ export default function MethodologyPage() {
           <p className="meth-body">
             Pick&apos;em Labs currently uses three large language models. Each
             model receives the same structured prompt containing fighter
-            statistics and odds data. They analyse the matchup independently —
+            statistics and odds data. They analyze the matchup independently —
             no model sees another&apos;s output before producing its prediction.
           </p>
           <div className="meth-model-grid">

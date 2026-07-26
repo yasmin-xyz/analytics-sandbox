@@ -12,6 +12,12 @@ export type ExpertChatFighterContext = {
 export type ExpertChatContext = {
   eventName: string;
   eventDate: string;
+  // The model has no built-in notion of "today" — without this, a past
+  // event's date reads as ambiguous and it tends to guess "upcoming"
+  // (see the isLive/completed fields below, which is the actual signal
+  // it needs instead of guessing from the date string alone).
+  completed: boolean;
+  isLive: boolean;
   cardFights: { fighterA: string; fighterB: string; weightClass: string }[];
   // null when the client-claimed selected fighters don't match any fight on
   // the authoritative card (never trust the claim blindly — see route.ts).
@@ -79,6 +85,8 @@ export async function buildExpertChatContext(
   return {
     eventName: event.eventName,
     eventDate: event.date,
+    completed: event.completed,
+    isLive: event.isLive,
     cardFights,
     selectedFight,
   };

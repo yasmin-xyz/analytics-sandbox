@@ -205,9 +205,22 @@ function buildSystemPrompt(
       `${formatFighterBlock("Fighter B", context.selectedFight.fighterB)}${marketBlock}`
     : "";
 
+  // The model has no built-in sense of "today" — without this, a past
+  // event's date reads as ambiguous and it defaults to assuming the card
+  // is still upcoming, even when it's already concluded and results exist.
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const eventStatus = context.isLive
+    ? "This event is happening right now — some fights may already have results while others haven't started."
+    : context.completed
+      ? "This event has already concluded — every fight on the card above has a result. Use the fighters' " +
+        "\"Recent fights\" history below (or a web_search if it's not covered there) to answer result questions " +
+        "instead of assuming the card hasn't happened yet."
+      : "This event hasn't happened yet.";
+
   return (
     `You are the 'Ask the Expert' assistant on Pick'em Labs, a UFC fight analysis site. ` +
-    `Answer questions about the current event: ${context.eventName} (${context.eventDate}).\n\n` +
+    `Today's date is ${today}. Answer questions about this event: ${context.eventName} (${context.eventDate}). ` +
+    `${eventStatus}\n\n` +
     `Full card:\n${cardList}${selectedBlock}\n\n` +
     `Instructions:\n` +
     `- The data above is already verified by this site — just answer naturally from it, the way a knowledgeable ` +
