@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { Anthropic } from "@posthog/ai/anthropic";
 import { buildExpertChatContext, type ExpertChatFighterContext } from "../../lib/expertChatContext";
 import { namesMatchExactly } from "../../lib/fighterName";
 import {
@@ -12,9 +12,11 @@ import {
   withTimeout,
 } from "../../lib/httpValidation";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "../../lib/rateLimit";
+import { getPostHogClient } from "../../lib/posthog-server";
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  posthog: getPostHogClient(),
 });
 
 // Separate budget from predict:* — a chat session naturally has more
@@ -342,6 +344,20 @@ export async function POST(request: Request) {
     if (!reply.trim()) {
       reply = "I wasn't able to put together an answer for that — try asking a different way.";
     }
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: clientIp,
+      event: "server_expert_chat_responded",
+      properties: {
+        fighter_a: selectedFighterA,
+        fighter_b: selectedFighterB,
+        used_search: usedSearch,
+        suggested_fight: !!suggestedFight,
+        conversation_turn: conversationHistory.length + 1,
+      },
+    });
+    await posthog.flush();
 
     return NextResponse.json({ reply, usedSearch, suggestedFight });
   } catch (error) {

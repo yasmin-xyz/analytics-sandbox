@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { Anthropic } from "@posthog/ai/anthropic";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import { normalizeFighterName } from "../../lib/fighterName";
@@ -15,9 +15,11 @@ import {
   withTimeout,
 } from "../../lib/httpValidation";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "../../lib/rateLimit";
+import { getPostHogClient } from "../../lib/posthog-server";
 
 const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  posthog: getPostHogClient(),
 });
 
 const openai = new OpenAI({
@@ -533,6 +535,17 @@ export async function POST(request: Request) {
     const bindingLimit = !shortLimit.allowed ? shortLimit : !dailyLimit.allowed ? dailyLimit : null;
 
     if (bindingLimit) {
+      const posthog = getPostHogClient();
+      posthog.capture({
+        distinctId: clientIp,
+        event: "server_prediction_rate_limited",
+        properties: {
+          fighter_a: fighterA,
+          fighter_b: fighterB,
+          retry_after_seconds: bindingLimit.retryAfterSeconds,
+        },
+      });
+      await posthog.flush();
       return rateLimitResponse(bindingLimit.retryAfterSeconds);
     }
 
@@ -730,6 +743,22 @@ export async function POST(request: Request) {
     } else {
       console.log("Saved prediction to Supabase:", fightKey);
     }
+
+    const posthog = getPostHogClient();
+    posthog.capture({
+      distinctId: clientIp,
+      event: "server_prediction_generated",
+      properties: {
+        fighter_a: fighterA,
+        fighter_b: fighterB,
+        event_name: eventName,
+        consensus_winner: finalPrediction.consensus.winner,
+        confidence: finalPrediction.consensus.confidence,
+        model_agreement: finalPrediction.consensus.modelAgreement,
+        total_successful_models: finalPrediction.consensus.totalSuccessfulModels,
+      },
+    });
+    await posthog.flush();
 
     return NextResponse.json(finalPrediction);
   } catch (error) {

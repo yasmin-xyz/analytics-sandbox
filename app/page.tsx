@@ -9,6 +9,7 @@ import ConfidenceMeter from "./components/ConfidenceMeter";
 import Countdown from "./components/Countdown";
 import FightSelect from "./components/FightSelect";
 import { useRevealOnScroll } from "./lib/useRevealOnScroll";
+import posthog from "posthog-js";
 
 function fightName(fight: any) {
   return `${fight.home_team} vs. ${fight.away_team}`;
@@ -440,11 +441,23 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
       }
 
       setPrediction(data);
+      posthog.capture("prediction_loaded", {
+        fighter_a: fight.fighterA,
+        fighter_b: fight.fighterB,
+        consensus_winner: data.consensus?.winner,
+        confidence: data.consensus?.confidence,
+        model_agreement: data.consensus?.modelAgreement,
+        total_successful_models: data.consensus?.totalSuccessfulModels,
+      });
     } catch (error) {
       console.error("Failed to fetch prediction:", error);
 
       if (requestId === requestIdRef.current) {
         setPredictionError(true);
+        posthog.capture("prediction_failed", {
+          fighter_a: fight.fighterA,
+          fighter_b: fight.fighterB,
+        });
       }
     } finally {
       if (requestId === requestIdRef.current) {
@@ -893,6 +906,7 @@ selectFight(defaultFight);
 
       function handleTabChange(tab: "main" | "prelims" | "early") {
         setActiveTab(tab);
+        posthog.capture("card_tab_changed", { tab });
 
         const nextFights =
           tab === "main"
@@ -942,6 +956,16 @@ selectFight(defaultFight);
 
   const isContrarianPick =
     marketGapLabel === "Contrarian pick" || marketGapLabel === "High-risk contrarian pick";
+
+  function handleFightSelect(fight: any) {
+    posthog.capture("fight_selected", {
+      fighter_a: fight.fighterA,
+      fighter_b: fight.fighterB,
+      fight_id: fight.id,
+      weight_class: fight.weightClass,
+    });
+    selectFight(fight);
+  }
 
   const oddsTimestampLabel = formatOddsTimestamp(oddsFetchedAt, now, oddsStale);
 
@@ -1243,7 +1267,7 @@ const statRows = [
     <FightSelect
       fights={visibleFights}
       selectedId={selectedFight?.id}
-      onSelect={selectFight}
+      onSelect={handleFightSelect}
     />
   </div>
 </div>
@@ -1478,7 +1502,13 @@ const statRows = [
         : "Advanced metrics not loaded for this matchup yet"}
       {metricsStatus === "timeout" && (
         <div>
-          <button type="button" className="retry-btn" onClick={() => startMetricsHistoryFetch(selectedFight)}>
+          <button type="button" className="retry-btn" onClick={() => {
+              posthog.capture("metrics_retry_clicked", {
+                fighter_a: selectedFight?.fighterA,
+                fighter_b: selectedFight?.fighterB,
+              });
+              startMetricsHistoryFetch(selectedFight);
+            }}>
             Retry
           </button>
         </div>
@@ -1522,7 +1552,13 @@ const statRows = [
       <div className="ai-loading ai-loading-error">
         Couldn't generate an AI breakdown for this matchup.
         <div>
-          <button type="button" className="retry-btn" onClick={() => loadPredictionData(selectedFight)}>
+          <button type="button" className="retry-btn" onClick={() => {
+              posthog.capture("prediction_retried", {
+                fighter_a: selectedFight?.fighterA,
+                fighter_b: selectedFight?.fighterB,
+              });
+              loadPredictionData(selectedFight);
+            }}>
             Retry
           </button>
         </div>
@@ -1922,7 +1958,10 @@ const statRows = [
                   type="button"
                   className={`toggle-btn ${historyToggle === "A" ? "toggle-active" : ""}`}
                   aria-pressed={historyToggle === "A"}
-                  onClick={() => setHistoryToggle("A")}
+                  onClick={() => {
+                    setHistoryToggle("A");
+                    posthog.capture("fight_history_toggled", { fighter: "A", fighter_name: selectedFight?.fighterA });
+                  }}
                 >
                   {shortName(selectedFight?.fighterA, "Fighter A")}
                 </button>
@@ -1930,7 +1969,10 @@ const statRows = [
                   type="button"
                   className={`toggle-btn ${historyToggle === "B" ? "toggle-active" : ""}`}
                   aria-pressed={historyToggle === "B"}
-                  onClick={() => setHistoryToggle("B")}
+                  onClick={() => {
+                    setHistoryToggle("B");
+                    posthog.capture("fight_history_toggled", { fighter: "B", fighter_name: selectedFight?.fighterB });
+                  }}
                 >
                   {shortName(selectedFight?.fighterB, "Fighter B")}
                 </button>
