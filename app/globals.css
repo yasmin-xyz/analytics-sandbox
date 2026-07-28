@@ -1348,6 +1348,20 @@ body {
   background: rgba(255, 255, 255, 0.22);
 }
 
+.odds-scroll-wrap {
+  position: relative;
+}
+
+/* Hidden on desktop — the styled native scrollbar above already works
+   there. Shown only in the mobile media query below, where it's the only
+   thing that can stay visible (see oddsScrollRef in page.tsx: mobile
+   Safari/Chrome hide the native scrollbar entirely outside an active
+   touch-scroll gesture, so this thumb's height/position is tracked and
+   drawn in JS instead). */
+.odds-scroll-track {
+  display: none;
+}
+
 /* Colored by actual favorite/underdog status (odds sign), not by which
    column a fighter happens to sit in. Tabular figures keep every row's
    digits the same width so the +/- sign lines up column to column. */
@@ -2017,6 +2031,36 @@ body {
 
   .book-name {
     font-size: 13px;
+  }
+
+  /* Native scrollbar is hidden here so the custom track/thumb below is
+     the only visible affordance — showing both would look like a bug. */
+  .odds-scroll {
+    scrollbar-width: none;
+  }
+
+  .odds-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .odds-scroll-track {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .odds-scroll-thumb {
+    position: absolute;
+    right: 0;
+    width: 4px;
+    min-height: 24px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.32);
   }
 
   /* Prediction summary */
