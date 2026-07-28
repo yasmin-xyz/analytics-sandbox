@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import FightSelect from "./FightSelect";
+import posthog from "posthog-js";
 
 type SuggestedFight = { fighterA: string; fighterB: string } | null;
 type ChatMessage = { role: "user" | "assistant"; content: string; suggestedFight?: SuggestedFight };
@@ -116,6 +117,11 @@ export default function ExpertChat({
     setInput("");
     setLoading(true);
     setError(null);
+    posthog.capture("expert_chat_message_sent", {
+      fighter_a: selectedFighterA,
+      fighter_b: selectedFighterB,
+      message_index: messages.length,
+    });
 
     try {
       const res = await fetch("/api/expert-chat", {
@@ -172,7 +178,13 @@ export default function ExpertChat({
         (f.fighterA === suggestion.fighterA && f.fighterB === suggestion.fighterB) ||
         (f.fighterA === suggestion.fighterB && f.fighterB === suggestion.fighterA)
     );
-    if (match) onSelectFight(match);
+    if (match) {
+      posthog.capture("expert_chat_fight_redirect", {
+        fighter_a: suggestion.fighterA,
+        fighter_b: suggestion.fighterB,
+      });
+      onSelectFight(match);
+    }
   }
 
   return (
@@ -183,7 +195,16 @@ export default function ExpertChat({
         className="nav-chat-btn"
         aria-expanded={open}
         aria-controls="expert-chat-panel"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          const opening = !open;
+          setOpen(opening);
+          if (opening) {
+            posthog.capture("expert_chat_opened", {
+              fighter_a: selectedFighterA,
+              fighter_b: selectedFighterB,
+            });
+          }
+        }}
       >
         Ask the Expert
       </button>
