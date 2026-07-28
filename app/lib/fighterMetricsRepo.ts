@@ -10,6 +10,18 @@ export const FRESHNESS_DAYS = 30;
 // weeks after Cito actually had them.
 export const NOT_FOUND_FRESHNESS_HOURS = 6;
 
+// A transient provider error (network blip, rate limit) needs an even
+// shorter window than "not found" — long enough that a client polling
+// every few seconds can't re-trigger a Cito call before the previous
+// one's rate-limit window has a chance to clear, short enough that a
+// real transient blip still self-corrects almost immediately. Without
+// this, a sustained rate limit and the frontend's own retry-on-poll
+// behavior feed each other: poll -> retry -> still rate-limited -> still
+// "syncing" -> poll again, immediately, forever, which is exactly what
+// prevented the limit from ever actually clearing (see the Rakić/
+// Błachowicz incident this was added for).
+export const ERROR_BACKOFF_SECONDS = 90;
+
 export function isFresh(timestamp: string | null | undefined, days = FRESHNESS_DAYS): boolean {
   if (!timestamp) return false;
   const age = Date.now() - new Date(timestamp).getTime();
@@ -20,6 +32,12 @@ export function isFreshHours(timestamp: string | null | undefined, hours: number
   if (!timestamp) return false;
   const age = Date.now() - new Date(timestamp).getTime();
   return age < hours * 60 * 60 * 1000;
+}
+
+export function isFreshSeconds(timestamp: string | null | undefined, seconds: number): boolean {
+  if (!timestamp) return false;
+  const age = Date.now() - new Date(timestamp).getTime();
+  return age < seconds * 1000;
 }
 
 export type FighterMetricsRow = {

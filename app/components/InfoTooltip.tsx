@@ -25,6 +25,8 @@ export default function InfoTooltip({
   width = 240,
   trigger,
   triggerClassName,
+  placement = "bottom",
+  compact = false,
 }: {
   label: string;
   children: React.ReactNode;
@@ -34,10 +36,18 @@ export default function InfoTooltip({
   // would be redundant with something already there to hover/tap.
   trigger?: React.ReactNode;
   triggerClassName?: string;
+  // "left" opens beside the trigger instead of below it — for triggers
+  // sitting directly above other content, where a panel below would
+  // cover it (e.g. the flag icons above the fighter record row).
+  placement?: "bottom" | "left";
+  // Skips the fixed `width` box and shrinks the panel to its content
+  // instead — for short single-line labels (e.g. a country name) where
+  // the standard paragraph-sized box reads as oversized.
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0, width, arrowLeft: width / 2 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, width, arrowLeft: width / 2, arrowTop: 0 });
   const wrapperRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -57,8 +67,30 @@ export default function InfoTooltip({
 
     function reposition() {
       const btn = btnRef.current;
+      const panel = panelRef.current;
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
+
+      if (placement === "left") {
+        // The panel is always mounted (just opacity: 0 while closed — see
+        // the render below), so it already has real layout dimensions to
+        // measure here, compact/content-sized width included.
+        const panelWidth = panel?.offsetWidth || width;
+        const panelHeight = panel?.offsetHeight || 0;
+
+        const minLeft = window.scrollX + VIEWPORT_MARGIN;
+        const desiredLeft = rect.left + window.scrollX - PANEL_GAP - panelWidth;
+        const left = Math.max(desiredLeft, minLeft);
+
+        const targetCenterY = rect.top + window.scrollY + rect.height / 2;
+        const minTop = window.scrollY + VIEWPORT_MARGIN;
+        const top = Math.max(targetCenterY - panelHeight / 2, minTop);
+
+        const arrowTop = Math.min(Math.max(targetCenterY - top, 14), Math.max(panelHeight - 14, 14));
+
+        setCoords({ top, left, width: panelWidth, arrowLeft: 0, arrowTop });
+        return;
+      }
 
       const available = window.innerWidth - VIEWPORT_MARGIN * 2;
       const effectiveWidth = Math.min(width, available);
@@ -71,7 +103,7 @@ export default function InfoTooltip({
       const targetCenter = rect.left + window.scrollX + rect.width / 2;
       const arrowLeft = Math.min(Math.max(targetCenter - left, 14), effectiveWidth - 14);
 
-      setCoords({ top, left, width: effectiveWidth, arrowLeft });
+      setCoords({ top, left, width: effectiveWidth, arrowLeft, arrowTop: 0 });
     }
 
     reposition();
@@ -98,7 +130,7 @@ export default function InfoTooltip({
       document.removeEventListener("touchstart", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, width]);
+  }, [open, width, placement]);
 
   function clearCloseTimer() {
     if (closeTimerRef.current) {
@@ -168,12 +200,19 @@ export default function InfoTooltip({
             id={panelId}
             ref={panelRef}
             role="tooltip"
-            className={`info-tooltip-panel ${open ? "info-tooltip-panel-open" : ""}`}
-            style={{ top: coords.top, left: coords.left, width: coords.width }}
+            className={`info-tooltip-panel ${compact ? "info-tooltip-panel-compact" : ""} ${open ? "info-tooltip-panel-open" : ""}`}
+            style={{
+              top: coords.top,
+              left: coords.left,
+              ...(compact ? {} : { width: coords.width }),
+            }}
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
           >
-            <span className="info-tooltip-arrow" style={{ left: coords.arrowLeft }} />
+            <span
+              className={`info-tooltip-arrow ${placement === "left" ? "info-tooltip-arrow-left" : ""}`}
+              style={placement === "left" ? { top: coords.arrowTop } : { left: coords.arrowLeft }}
+            />
             {children}
           </div>,
           document.body

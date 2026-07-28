@@ -25,6 +25,13 @@ export type UfcEvent = {
   shortName: string;
   date: string;
   venue: string;
+  // City/state split out separately from `venue` (the arena name) so the
+  // event bar can render "T-Mobile Arena, Las Vegas, NV" instead of just
+  // the arena name — undefined rather than "" when ESPN doesn't have an
+  // address on file, so the UI can cleanly omit it instead of showing a
+  // stray comma.
+  venueCity: string | undefined;
+  venueState: string | undefined;
   fights: UfcEventFight[];
   completed: boolean;
   // ESPN's own status.type.state ("pre" | "in" | "post") — a direct signal
@@ -98,11 +105,15 @@ async function fetchCurrentUfcEventUncached(): Promise<UfcEvent | null> {
     ? findNextEvent(data.leagues?.[0]?.calendar, event.name)
     : null;
 
+  const venueAddress = event.competitions?.[0]?.venue?.address || event.venue?.address;
+
   return {
     eventName: event.name,
     shortName: event.shortName,
     date: event.date,
     venue: event.competitions?.[0]?.venue?.fullName || "Venue TBD",
+    venueCity: venueAddress?.city || undefined,
+    venueState: venueAddress?.state || undefined,
     fights,
     completed,
     isLive,

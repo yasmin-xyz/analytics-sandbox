@@ -548,23 +548,17 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
         setUfcEvent(eventData);
         setMergedFights(merged);
 
-        try {
-          const espnRes = await fetch(
-            "https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard"
-          );
-          const espnData = await espnRes.json();
-          const nextEvent = espnData?.events?.[0];
-          if (nextEvent) {
-            const venue = nextEvent?.competitions?.[0]?.venue;
-            if (venue) {
-              setEventVenue(venue.fullName || "");
-              const city = venue.address?.city || "";
-              const state = venue.address?.state || "";
-              setEventLocation(`${city}${state ? `, ${state}` : ""}`);
-            }
-          }
-        } catch {
-          // venue data is optional, fail silently
+        // Sourced from the /api/ufc-event response already fetched above —
+        // this used to be a second, separate fetch straight to ESPN from
+        // the browser, which the app's own connect-src 'self' CSP silently
+        // blocked (caught and swallowed as "venue data is optional"), so
+        // venue/location never actually rendered. No second request needed:
+        // the server-side fetch behind /api/ufc-event already has this.
+        if (eventData.venue && eventData.venue !== "Venue TBD") {
+          setEventVenue(eventData.venue);
+          const city = eventData.venueCity || "";
+          const state = eventData.venueState || "";
+          setEventLocation(`${city}${state ? `, ${state}` : ""}`);
         }
 
         const mainCardFights = merged.slice(-5).reverse();
@@ -865,7 +859,7 @@ selectFight(defaultFight);
 
       function handleTabChange(tab: "main" | "prelims" | "early") {
         setActiveTab(tab);
-      
+
         const nextFights =
           tab === "main"
             ? mainCardFights
@@ -1079,54 +1073,69 @@ const statRows = [
     ufcEvent?.isLive ? "event-bar-live" : ""
   }`}
 >
-  <div className="event-dot"></div>
-  <span className="event-eyebrow">
-    {ufcEvent?.completed ? "Event Concluded" : ufcEvent?.isLive ? "Live Now" : "Next Event"}
-  </span>
+  <div className="event-heading">
+    <div className="event-dot"></div>
+    <span className="event-eyebrow">
+      {ufcEvent?.completed ? "Event Concluded" : ufcEvent?.isLive ? "Live Now" : "Next Event"}
+    </span>
+  </div>
   {ufcEvent ? (
     <>
       <span className="event-name event-fade-in">{ufcEvent.eventName}</span>
-      <span className="event-date-line event-fade-in">
-        <span className="event-date">
-          {ufcEvent.completed ? (
-            ufcEvent.nextEvent ? (
+      {!ufcEvent.completed && eventVenue && (
+        // Venue only matters while the event is still upcoming or actually
+        // happening — once it's concluded, the "next event" card below
+        // replaces this whole row and where the PAST event was held isn't
+        // useful info anymore.
+        <span className="event-venue event-fade-in">
+          <span className="event-venue-sep">· </span>
+          {eventVenue}
+          {eventLocation && `, ${eventLocation}`}
+        </span>
+      )}
+      {ufcEvent.completed ? (
+        <span className="event-date-line event-fade-in">
+          <span className="event-date">
+            {ufcEvent.nextEvent ? (
               <>
-                Check back closer to {new Date(ufcEvent.nextEvent.date).toLocaleDateString("en-US", {
+                Check back closer to{" "}
+                {new Date(ufcEvent.nextEvent.date).toLocaleDateString("en-US", {
                   month: "long",
                   day: "numeric",
-                })}{" "}for {ufcEvent.nextEvent.name}
+                })}{" "}
+                for {ufcEvent.nextEvent.name}
               </>
             ) : (
               "Check back soon for the next event"
-            )
+            )}
+          </span>
+        </span>
+      ) : (
+        <span className="event-date-line event-fade-in">
+          <span className="event-date">
+            {ufcEvent.date
+              ? new Date(ufcEvent.date).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : ""}
+          </span>
+          <span className="event-date-sep">·</span>
+          {ufcEvent.isLive ? (
+            <span className="event-live-badge">
+              <span className="event-live-dot" />
+              LIVE
+            </span>
           ) : (
-            <>
-              {ufcEvent.date
-                ? new Date(ufcEvent.date).toLocaleDateString("en-US", {
-                    month: "long",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                : ""}
-              {eventVenue && ` · ${eventVenue}`}
-              {eventLocation && ` · ${eventLocation}`}
-            </>
+            // The event's own start time, not the currently-selected fight's
+            // (main-card bouts get a distinct, later time from ESPN than the
+            // event's nominal start — this bar is about the event, and
+            // shouldn't jump around as the fight dropdown changes).
+            <Countdown targetDate={ufcEvent.date} className="event-countdown" />
           )}
         </span>
-        {!ufcEvent.completed && ufcEvent.isLive && (
-          <span className="event-live-badge">
-            <span className="event-live-dot" />
-            LIVE
-          </span>
-        )}
-        {!ufcEvent.completed && !ufcEvent.isLive && (
-          // The event's own start time, not the currently-selected fight's
-          // (main-card bouts get a distinct, later time from ESPN than the
-          // event's nominal start — this bar is about the event, and
-          // shouldn't jump around as the fight dropdown changes).
-          <Countdown targetDate={ufcEvent.date} className="event-countdown" />
-        )}
-      </span>
+      )}
     </>
   ) : (
     <>
@@ -1246,7 +1255,18 @@ const statRows = [
                 )}
                   <div className="fighter-record-row">
                     {fighterAStats?.flag && (
-                      <img src={fighterAStats.flag} alt="" className="fighter-flag" />
+                      fighterAStats?.country ? (
+                        <InfoTooltip
+                          label={fighterAStats.country}
+                          placement="left"
+                          compact
+                          trigger={<img src={fighterAStats.flag} alt="" className="fighter-flag" />}
+                        >
+                          {fighterAStats.country}
+                        </InfoTooltip>
+                      ) : (
+                        <img src={fighterAStats.flag} alt="" className="fighter-flag" />
+                      )
                     )}
                     <span className="fighter-record">{fighterAStats?.record || selectedFight?.recordA || "—"}</span>
                   </div>
@@ -1280,7 +1300,18 @@ const statRows = [
                 )}
                   <div className="fighter-record-row fighter-record-row-b">
                     {fighterBStats?.flag && (
-                      <img src={fighterBStats.flag} alt="" className="fighter-flag" />
+                      fighterBStats?.country ? (
+                        <InfoTooltip
+                          label={fighterBStats.country}
+                          placement="left"
+                          compact
+                          trigger={<img src={fighterBStats.flag} alt="" className="fighter-flag" />}
+                        >
+                          {fighterBStats.country}
+                        </InfoTooltip>
+                      ) : (
+                        <img src={fighterBStats.flag} alt="" className="fighter-flag" />
+                      )
                     )}
                     <span className="fighter-record">{fighterBStats?.record || selectedFight?.recordB || "—"}</span>
                   </div>

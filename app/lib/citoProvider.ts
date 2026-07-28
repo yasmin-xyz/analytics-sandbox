@@ -1,5 +1,5 @@
 import "server-only";
-import { namesMatchExactly } from "./fighterName";
+import { namesMatchExactly, stripDiacritics } from "./fighterName";
 
 // Enforced by the server-only import above — it reads CITO_API_KEY from
 // process.env and that must never reach the browser.
@@ -85,8 +85,17 @@ async function citoFetch<T>(path: string): Promise<CitoFetchResult<T>> {
     citoCallCount += 1;
     console.log(`[citoProvider] Cito request started: ${path}`);
 
+    // no-store is required here, not optional — this app's fetch caches
+    // by default (see the same fix in ufcEvent.ts), and Cito's search
+    // results are per-fighter live lookups: caching by URL means every
+    // future request for the same fighter name replays whatever the
+    // FIRST response was forever, including a transient error or a
+    // search that came back empty right as Cito's own index caught up
+    // after a plan upgrade — exactly what caused Rakić/Błachowicz to
+    // read as permanently "not found" even once Cito itself was healthy.
     const res = await fetch(`${CITO_BASE_URL}${path}`, {
       headers: { "x-api-key": CITO_API_KEY },
+      cache: "no-store",
     });
 
     if (!res.ok) {
@@ -110,23 +119,67 @@ export type FighterSearchResult =
   | { status: "ambiguous"; candidateCount: number }
   | { status: "error"; error: string };
 
-export async function searchCitoFighter(fighterName: string): Promise<FighterSearchResult> {
-  const result = await citoFetch<{ fighters: CitoSearchFighter[] }>(
-    `/search?q=${encodeURIComponent(fighterName)}`
-  );
+async function runCitoSearch(query: string): Promise<CitoFetchResult<{ fighters: CitoSearchFighter[] }>> {
+  return citoFetch<{ fighters: CitoSearchFighter[] }>(`/search?q=${encodeURIComponent(query)}`);
+}
 
-  if (!result.ok) {
-    return { status: "error", error: result.error };
+// Cito's search can come back completely empty for a query whose spelling
+// doesn't closely match what it has on file — and "closely" cuts both
+// ways: querying plain-ASCII "Jan Blachowicz" finds nothing even though
+// Cito has "Jan Błachowicz" on file (diacritic in THEIR data, not ours),
+// while querying accented "Vlasto Čepo" finds nothing even though Cito
+// has him as the plain-ASCII "Vlasto Cepo" (diacritic in OUR data, not
+// theirs). Neither direction reliably fuzzy-matches, and it also seems
+// stricter across a full multi-word query than a single surname token.
+// So: try the full name, then the same with diacritics stripped, then
+// just the surname, then the surname with diacritics stripped — in that
+// order, stopping at the first query that turns up a match. Every
+// variant still has to pass namesMatchExactly() against the real full
+// name below, so a same-surname mismatch (wrong fighter entirely) can
+// never slip through — trying more query spellings only ever succeeds by
+// finding the fighter actually asked for.
+function buildSearchQueries(fighterName: string): string[] {
+  const queries = new Set<string>();
+  queries.add(fighterName);
+
+  const stripped = stripDiacritics(fighterName);
+  if (stripped !== fighterName) queries.add(stripped);
+
+  const words = fighterName.trim().split(/\s+/);
+  if (words.length >= 2) {
+    const surname = words[words.length - 1];
+    queries.add(surname);
+
+    const strippedSurname = stripDiacritics(surname);
+    if (strippedSurname !== surname) queries.add(strippedSurname);
   }
 
-  const candidates = (result.data.fighters || []).filter((f) =>
-    namesMatchExactly(f.name, fighterName)
-  );
+  return [...queries];
+}
 
-  if (candidates.length === 0) return { status: "not_found" };
-  if (candidates.length > 1) return { status: "ambiguous", candidateCount: candidates.length };
+export async function searchCitoFighter(fighterName: string): Promise<FighterSearchResult> {
+  for (const query of buildSearchQueries(fighterName)) {
+    const result = await runCitoSearch(query);
 
-  return { status: "matched", fighter: candidates[0] };
+    // A transient failure (network blip, rate limit) applies to the
+    // whole API, not to this one query string — trying the other query
+    // variants right now wouldn't help and would just burn more of the
+    // same limited quota for nothing. Bail out immediately; the caller's
+    // short backoff window (see ERROR_BACKOFF_SECONDS) is what actually
+    // needs to pass before trying again.
+    if (!result.ok) {
+      return { status: "error", error: result.error };
+    }
+
+    const candidates = (result.data.fighters || []).filter((f) =>
+      namesMatchExactly(f.name, fighterName)
+    );
+
+    if (candidates.length === 1) return { status: "matched", fighter: candidates[0] };
+    if (candidates.length > 1) return { status: "ambiguous", candidateCount: candidates.length };
+  }
+
+  return { status: "not_found" };
 }
 
 export type FightHistoryResult =
