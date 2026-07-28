@@ -303,6 +303,12 @@ export default function Home() {
   // request has even resolved.
   const [oddsProviderAvailable, setOddsProviderAvailable] = useState(true);
   const [oddsStale, setOddsStale] = useState(false);
+  // Mobile browsers run overlay scrollbars that fade out after inactivity
+  // no matter how .odds-scroll::-webkit-scrollbar is styled — this custom
+  // track/thumb (see oddsScrollRef effect below) is the only reliable way
+  // to keep a scroll affordance visible there at all times.
+  const oddsScrollRef = useRef<HTMLDivElement>(null);
+  const [oddsThumb, setOddsThumb] = useState({ visible: false, heightPct: 100, topPct: 0 });
   // Ticks once a minute purely so the "Last updated X ago" copy stays
   // accurate over a long-lived page session — never triggers a re-fetch.
   const [now, setNow] = useState(() => Date.now());
@@ -833,6 +839,34 @@ selectFight(defaultFight);
       }
     };
   }, [selectedFight]);
+
+  useEffect(() => {
+    const el = oddsScrollRef.current;
+    if (!el) return;
+
+    function update() {
+      if (!el) return;
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      if (scrollHeight <= clientHeight + 1) {
+        setOddsThumb((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+        return;
+      }
+      setOddsThumb({
+        visible: true,
+        heightPct: (clientHeight / scrollHeight) * 100,
+        topPct: (scrollTop / scrollHeight) * 100,
+      });
+    }
+
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [selectedFight?.odds?.bookmakers?.length, loadingOdds]);
 
   const ufc329Fights = [
     "Conor McGregor vs. Max Holloway",
@@ -1628,7 +1662,8 @@ const statRows = [
                 <span className="odds-col-label">{shortName(selectedFight?.fighterA, "Fighter A")}</span>
                 <span className="odds-col-label">{shortName(selectedFight?.fighterB, "Fighter B")}</span>
               </div>
-              <div className="odds-scroll">
+              <div className="odds-scroll-wrap">
+              <div className="odds-scroll" ref={oddsScrollRef}>
               {loadingOdds ? (
   Array.from({ length: 4 }).map((_, i) => (
     <div key={i} className="skeleton-odds-book">
@@ -1661,6 +1696,15 @@ const statRows = [
 ) : (
   <div className="ai-loading">Odds are temporarily unavailable — check back shortly</div>
 )}
+              </div>
+              {oddsThumb.visible && (
+                <div className="odds-scroll-track" aria-hidden="true">
+                  <div
+                    className="odds-scroll-thumb"
+                    style={{ height: `${oddsThumb.heightPct}%`, top: `${oddsThumb.topPct}%` }}
+                  />
+                </div>
+              )}
               </div>
               {oddsTimestampLabel && (
                 <div
