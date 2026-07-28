@@ -310,6 +310,32 @@ body {
   pointer-events: none;
 }
 
+/* placement="left" variant — sits on the panel's right edge instead of
+   its top edge, pointing right toward the trigger. Vertical position
+   (`top`) is computed in JS the same way `left` is for the default
+   caret. */
+.info-tooltip-arrow-left {
+  top: auto;
+  right: -5px;
+  left: auto;
+  margin-left: 0;
+  margin-top: -4.5px;
+  border-left: none;
+  border-top: 0.5px solid rgba(255, 255, 255, 0.1);
+  border-right: 0.5px solid rgba(255, 255, 255, 0.1);
+}
+
+/* compact variant — for short single-line labels (e.g. a country name)
+   where the standard paragraph-sized box reads as oversized. Shrinks to
+   its content instead of the fixed `width` box. */
+.info-tooltip-panel-compact {
+  width: max-content;
+  max-width: 180px;
+  padding: 5px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 /* ASK THE EXPERT — nav trigger + slide-over chat panel. Sits above the
    InfoTooltip/Dropdown panels (both z-index: 300) since it can legitimately
    be open at the same time either of those is triggered from elsewhere on
@@ -775,51 +801,67 @@ body {
 }
 
 /* EVENT BAR */
-.event-bar { background: rgba(98, 55, 176, 0.04); border-bottom: 0.5px solid rgba(98, 55, 176, 0.1); padding: 11px 40px; display: flex; align-items: center; gap: 12px; }
-.event-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-primary); flex-shrink: 0; animation: pulse 2.5s ease-in-out infinite; }
+.event-bar { background: rgba(98, 55, 176, 0.04); border-bottom: 0.5px solid rgba(98, 55, 176, 0.1); padding: 9px 40px; display: flex; align-items: center; gap: 10px; }
+
+/* Dot + eyebrow read as a single status badge now (rounded, tinted,
+   bordered) rather than plain small-caps text sitting loose in the bar —
+   a chip is a much clearer "this is a status" signal than italics/color
+   alone, and matches the pill language used elsewhere on the page
+   (weight-class tag, notify button). On mobile this whole chip becomes
+   its own full-width row above the event name (see the mobile override
+   below), rather than the dot/eyebrow/name all fighting for space side
+   by side in a narrow column. */
+.event-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 3px 10px 3px 8px;
+  border-radius: 999px;
+  background: rgba(101, 95, 223, 0.1);
+  border: 1px solid rgba(101, 95, 223, 0.25);
+}
+.event-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-primary); flex-shrink: 0; animation: pulse 2.5s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(98, 55, 176, 0.4); } 50% { opacity: 0.7; box-shadow: 0 0 0 5px rgba(98, 55, 176, 0); } }
-.event-eyebrow { font-size: 10px; color: rgba(255,255,255,0.28); text-transform: uppercase; letter-spacing: 0.1em; }
-.event-name { font-size: 13px; font-weight: 500; color: #E8E8EC; }
+.event-eyebrow { font-size: 10px; font-weight: 700; color: var(--accent-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.event-name { font-size: 12px; font-weight: 500; color: #E8E8EC; }
 
 /* The single flex item that fills the rest of the bar after the name —
    growing to fill that space (rather than shrink-wrapping its content)
    is what lets the countdown's margin-left: auto push all the way to
    the bar's real right edge instead of just this wrapper's own edge. */
-.event-date-line { display: flex; align-items: baseline; flex: 1; min-width: 0; gap: 10px; }
+/* Venue sits with the event name (the "what/where") — no styling of its
+   own needed beyond color/size, since it just flows inline after
+   .event-name on desktop and automatically becomes its own row on mobile
+   via the same grid layout .event-name already relies on. */
+.event-venue { font-size: 12px; color: rgba(255, 255, 255, 0.4); }
+
+/* margin-left: auto (not flex: 1) is what keeps date + countdown as one
+   tight right-aligned unit — flex: 1 would stretch this to fill all
+   remaining space and let the countdown's own auto-margin drift it away
+   from the date, undoing the "one unit" grouping. */
+.event-date-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; margin-left: auto; white-space: nowrap; }
 .event-date { font-size: 12px; color: rgba(255,255,255,0.4); }
-.event-countdown { font-size: 11px; color: var(--accent-muted); font-weight: 600; margin-left: auto; white-space: nowrap; }
+.event-date-sep { font-size: 12px; color: rgba(255, 255, 255, 0.25); }
+.event-countdown { font-size: 10px; color: var(--accent-muted); font-weight: 600; white-space: nowrap; }
 
 /* A concluded event isn't "live" — still the dot, drop the pulse, and
-   mute the name slightly so the bar reads as settled/past rather than
-   competing with the forward-looking "check back" message. Italic across
-   the whole line marks it as a different kind of message — a passive
-   status note rather than the live event details shown the rest of the
-   time. */
+   swap the status chip to a neutral grey (rather than reusing the site's
+   purple, which now reads specifically as "upcoming/actionable" via the
+   next-event card below) so the bar reads as settled/past. */
 .event-bar-concluded .event-dot {
   animation: none;
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.4);
 }
-/* A plain sky blue rather than the site's indigo accent — the concluded
-   state shouldn't read as just another shade of the same purple used
-   everywhere else. */
+.event-bar-concluded .event-heading {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+}
 .event-bar-concluded .event-eyebrow {
-  color: #2F7BD6;
-  font-weight: 700;
-  font-style: italic;
+  color: rgba(255, 255, 255, 0.55);
 }
 .event-bar-concluded .event-name {
-  color: rgba(255, 255, 255, 0.55);
-  font-style: italic;
-}
-.event-bar-concluded .event-date {
-  color: #2F7BD6;
-  font-style: italic;
-}
-/* No countdown sits alongside this state to claim the far-right slot,
-   so the date/message reclaims it instead of trailing right after the
-   name. */
-.event-bar-concluded .event-date-line {
-  justify-content: flex-end;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 /* An event mid-broadcast — distinct red rather than the app's purple
@@ -838,6 +880,11 @@ body {
 .event-bar-live .event-eyebrow {
   color: var(--red);
   font-weight: 700;
+}
+
+.event-bar-live .event-heading {
+  background: rgba(220, 80, 80, 0.1);
+  border-color: rgba(220, 80, 80, 0.3);
 }
 
 .event-live-badge {
@@ -1674,61 +1721,100 @@ body {
 
   /* Event information */
 
+  /* A single column — every child (heading, name, date-line/next-row)
+     is now its own full-width row rather than dot/eyebrow/name all
+     fighting for space side by side. Long fighter/event names get a full
+     line to themselves instead of wrapping awkwardly mid-name in a
+     squeezed column. */
   .event-bar {
     padding: 14px 16px;
     display: grid;
-    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-columns: 1fr;
     align-items: start;
-    gap: 6px 10px;
+    gap: 8px;
   }
 
-  .event-dot {
-    margin-top: 5px;
+  /* The pill/chip treatment works on desktop where it sits beside the
+     event name as a compact badge, but stacked full-width on mobile it
+     reads as a boxy, out-of-place shape competing with the plain text
+     right below it — dropped back to plain text here, same as before
+     the badge redesign. Grid's default justify-items: stretch would
+     otherwise pull this across the whole row width too. */
+  .event-heading {
+    justify-self: start;
+    background: none;
+    border: none;
+    padding: 0;
   }
 
+  /* No dot on mobile — without the pill background to sit inside, it
+     just reads as a stray mark, and dropping it lets "NEXT EVENT" start
+     flush left, aligned with the event name and venue lines below it. */
+  .event-heading .event-dot {
+    display: none;
+  }
+
+  /* Every other piece of text in the bar reads at the same 11px on
+     mobile — the eyebrow stays a size down, since at 11px "NEXT EVENT"
+     started competing with the event name for attention instead of
+     reading as a small status label above it. */
   .event-eyebrow {
+    font-size: 8.5px;
     line-height: 1.4;
   }
 
   .event-name {
+    font-size: 11px;
     min-width: 0;
     line-height: 1.35;
+    /* Same trick as .event-venue below — pulls this up against the
+       status pill above it, tighter than the grid's shared row gap. */
+    margin-top: -4px;
   }
 
-  /* The wrapper (not each piece separately) is the grid item here, so
-     the date and countdown inside it just flow inline together on the
-     same line rather than each claiming their own grid row. Spans the
-     full width (not just the column-2-onward indent under the name)
-     and never wraps — that's the room a long countdown needs to always
-     fit on one line instead of dropping to a second. */
+  /* No bullet here — on its own line under the name, "· Belgrade Arena"
+     reads as a stray leading dot rather than a separator, and it also
+     nudges the text out of alignment with the name above it. */
+  .event-venue-sep {
+    display: none;
+  }
+
+  .event-venue {
+    font-size: 11px;
+    min-width: 0;
+    line-height: 1.4;
+    /* Pulls this back up against the name above it — the grid's own row
+       gap (shared by every row in this stack) is too generous just for
+       this one pair, so this cancels it out rather than shrinking the
+       gap globally and cramping the rows above/below it too. */
+    margin-top: -4px;
+  }
+
+  /* The wrapper (not each piece separately) is the grid item here.
+     Grouped tight and left-aligned — same "date · countdown" unit as
+     desktop — rather than stretched full-width with the two ends spread
+     apart, which read as disconnected and left too much dead space. */
   .event-date-line {
     grid-column: 1 / -1;
     flex: initial;
-    flex-wrap: nowrap;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-left: 0;
     margin-top: 2px;
   }
 
   .event-date {
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.4;
     white-space: nowrap;
   }
 
+  .event-date-sep {
+    font-size: 11px;
+  }
+
   .event-countdown {
-    font-size: 10px;
-    margin-left: 0;
-  }
-
-  /* Unlike the live/upcoming states, the concluded "check back" message
-     has no countdown sharing this line — so instead of forcing it onto
-     one (often overflowing) line, let it wrap onto a second. */
-  .event-bar-concluded .event-date-line {
-    flex-wrap: wrap;
-  }
-
-  .event-bar-concluded .event-date {
-    white-space: normal;
+    font-size: 9.5px;
   }
 
   /* The eyebrow already reads "LIVE NOW" up top on mobile — this second
@@ -3041,6 +3127,19 @@ body {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+/* Off-screen rather than display:none/visibility:hidden — some bots skip
+   fields a stylesheet marks invisible, but rarely bother computing actual
+   layout position before filling a form. Real users (and screen readers,
+   via aria-hidden + tabIndex=-1 on the input itself) never encounter it. */
+.form-honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .form-group {

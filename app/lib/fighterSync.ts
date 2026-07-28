@@ -13,7 +13,9 @@ import {
   upsertHistoryRows,
   isFresh,
   isFreshHours,
+  isFreshSeconds,
   NOT_FOUND_FRESHNESS_HOURS,
+  ERROR_BACKOFF_SECONDS,
   type FighterMetricsRow,
   type FighterHistoryRow,
 } from "./fighterMetricsRepo";
@@ -25,9 +27,18 @@ import {
 // left several fighters permanently stuck with no metrics, no history,
 // and no Sherdog fallback (which needs a real Cito slug to key its rows
 // under) until the marker was manually cleared.
+//
+// A "cito-error" row gets an even shorter window (see ERROR_BACKOFF_SECONDS)
+// — a transient failure (rate limit, network blip) shouldn't be trusted
+// for hours, but it does need SOME backoff, or a client polling every few
+// seconds re-triggers a Cito call immediately on every single poll,
+// which never gives a rate-limit window room to actually clear.
 function isMetricsRowFresh(row: { source: string | null; last_synced_at: string | null }): boolean {
   if (row.source === "cito-not-found") {
     return isFreshHours(row.last_synced_at, NOT_FOUND_FRESHNESS_HOURS);
+  }
+  if (row.source === "cito-error") {
+    return isFreshSeconds(row.last_synced_at, ERROR_BACKOFF_SECONDS);
   }
   return isFresh(row.last_synced_at);
 }
@@ -114,7 +125,14 @@ export async function peekFighterMetrics(fighterName: string): Promise<MetricsPe
     return { normalizedName, providerSlug: null, status: "missing", needsRefresh: true, metrics: null, octagonDebut: null };
   }
 
-  if (cached.source === "cito-not-found") {
+  // A cito-error row is treated the same as a confirmed not-found here —
+  // "known_unavailable" plus needsRefresh (governed by isMetricsRowFresh's
+  // short ERROR_BACKOFF_SECONDS window for this source) is exactly the
+  // semantics the caller needs: report unavailable without immediately
+  // re-triggering a sync, but retry soon rather than falling through to
+  // the "cached" branch below, which would otherwise treat this all-null
+  // placeholder row as real, fresh-for-30-days data.
+  if (cached.source === "cito-not-found" || cached.source === "cito-error") {
     return {
       normalizedName,
       providerSlug: null,
@@ -199,13 +217,12 @@ export async function syncFighterMetrics(fighterName: string): Promise<MetricsSy
     );
 
     // Only a real previously-synced row is worth falling back to here — a
-    // cached "not found" marker has no actual data behind it, so falling
-    // back to it would just return the same stale marker forever without
-    // ever refreshing last_synced_at, permanently defeating the shorter
-    // not-found freshness window below (every future request would see it
-    // as stale and re-trigger a background sync, forever, for a fighter
-    // Cito may still genuinely not have).
-    if (cached && cached.source !== "cito-not-found") {
+    // "not found" or "error" marker has no actual data behind it, so
+    // falling back to it would just return the same stale marker forever
+    // without ever refreshing last_synced_at, permanently defeating the
+    // shorter freshness windows below (every future request would see it
+    // as stale and re-trigger a background sync, forever).
+    if (cached && cached.source !== "cito-not-found" && cached.source !== "cito-error") {
       console.warn(`[fighterSync] falling back to stale cached metrics: "${fighterName}"`);
       return {
         normalizedName,
@@ -220,15 +237,26 @@ export async function syncFighterMetrics(fighterName: string): Promise<MetricsSy
     // completed and Cito simply doesn't have this fighter. Record that so
     // every subsequent poll/page-view doesn't re-burn a Cito call hoping
     // for a different answer; the freshness window gives it another try
-    // later in case Cito adds the fighter. A transient "error" status is
-    // NOT recorded here, since that should keep retrying immediately.
-    if (searchResult.status === "not_found" || searchResult.status === "ambiguous") {
+    // later in case Cito adds the fighter.
+    //
+    // A transient "error" (network blip, rate limit) gets its own marker
+    // too, just with a much shorter window (ERROR_BACKOFF_SECONDS) — it
+    // still needs to self-correct fast, but leaving it completely
+    // unrecorded (the previous behavior) meant a client polling every few
+    // seconds could re-trigger a Cito call on every single poll with zero
+    // backoff, which is exactly what turns a transient rate limit into a
+    // sustained one: the retries never give the window room to clear.
+    if (
+      searchResult.status === "not_found" ||
+      searchResult.status === "ambiguous" ||
+      searchResult.status === "error"
+    ) {
       const now = new Date().toISOString();
       const placeholderRow: FighterMetricsRow = {
         fighter_name: fighterName,
         normalized_name: normalizedName,
         provider_slug: null,
-        source: "cito-not-found",
+        source: searchResult.status === "error" ? "cito-error" : "cito-not-found",
         source_url: null,
         slpm: null,
         str_acc: null,
@@ -245,7 +273,7 @@ export async function syncFighterMetrics(fighterName: string): Promise<MetricsSy
 
       const saved = await upsertMetrics(placeholderRow);
       if (!saved) {
-        console.error(`[fighterSync] Supabase save failure (not-found marker): "${fighterName}"`);
+        console.error(`[fighterSync] Supabase save failure (${placeholderRow.source} marker): "${fighterName}"`);
       }
     }
 
