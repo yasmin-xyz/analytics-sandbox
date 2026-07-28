@@ -251,7 +251,15 @@ body {
 /* Reset for InfoTooltip's `trigger` mode — the caller's own element
    (passed as `trigger`) supplies all visual styling via its own class;
    this just strips the browser's default button chrome so it renders
-   identically to how it looked before it became interactive. */
+   identically to how it looked before it became interactive. A bare
+   <button> defaults to `display: block`, which gives it its own
+   block-level line box — its trigger content (e.g. the flag <img>) then
+   sits on that line box's text baseline instead of centering with
+   flex siblings alongside it (the fighter-record-row misalignment).
+   inline-flex + align-items: center fixes that without changing the
+   button's own footprint. Callers that need a different display (e.g.
+   .fighter-debut-note's inline-block badge) still win via their own
+   explicit rule further down the stylesheet. */
 .info-tooltip-btn-custom {
   background: none;
   border: none;
@@ -261,6 +269,8 @@ body {
   color: inherit;
   text-align: inherit;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
 }
 
 .info-tooltip-btn-custom:focus-visible {
@@ -1229,7 +1239,11 @@ body {
 .fighter-b { text-align: right; }
 .fighter-name { font-size: 20px; font-weight: 700; color: #E8E8EC; letter-spacing: -0.025em; }
 .fighter-nickname { font-size: 12px; font-style: italic; color: rgba(255,255,255,0.4); margin-top: 2px; }
-.fighter-record-row { display: flex; align-items: center; gap: 6px; margin-top: 5px; }
+/* flex-end (not center) — the flag (fixed 16px) and record text (its own
+   line-box height, taller than 16px) don't share a height, so centering
+   their midpoints still leaves their bottoms visibly offset. Bottom
+   alignment is what actually reads as "sitting on the same line". */
+.fighter-record-row { display: flex; align-items: flex-end; gap: 6px; margin-top: 5px; }
 .fighter-b .fighter-record-row { justify-content: flex-end; }
 .fighter-record { font-size: 12px; color: rgba(255,255,255,0.3); }
 .fighter-flag { height: 16px; width: auto; border-radius: 2px; opacity: 0.95; }

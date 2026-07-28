@@ -6,6 +6,12 @@ import { createPortal } from "react-dom";
 const VIEWPORT_MARGIN = 12;
 const PANEL_GAP = 10;
 const CLOSE_DELAY = 150;
+// "left" placement assumes room beside the trigger — on a narrow viewport
+// a left-edge trigger (e.g. the fighter A flag) has nowhere to its left
+// at all, so below this width it falls back to opening below instead,
+// same as the default placement. Matches the breakpoint the rest of the
+// app's mobile layout switches at.
+const LEFT_PLACEMENT_MIN_WIDTH = 768;
 
 // Reusable info/disclosure trigger used beside section titles and the nav
 // "about" icon. The panel is rendered through a portal into document.body
@@ -48,6 +54,11 @@ export default function InfoTooltip({
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0, width, arrowLeft: width / 2, arrowTop: 0 });
+  // Tracks which placement actually got used the last time reposition()
+  // ran — may differ from the `placement` prop on a narrow viewport (see
+  // LEFT_PLACEMENT_MIN_WIDTH). Drives the arrow's style, since it has to
+  // match whichever positioning math coords was actually computed with.
+  const [resolvedPlacement, setResolvedPlacement] = useState(placement);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -71,7 +82,11 @@ export default function InfoTooltip({
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
 
-      if (placement === "left") {
+      const effectivePlacement =
+        placement === "left" && window.innerWidth < LEFT_PLACEMENT_MIN_WIDTH ? "bottom" : placement;
+      setResolvedPlacement(effectivePlacement);
+
+      if (effectivePlacement === "left") {
         // The panel is always mounted (just opacity: 0 while closed — see
         // the render below), so it already has real layout dimensions to
         // measure here, compact/content-sized width included.
@@ -92,8 +107,13 @@ export default function InfoTooltip({
         return;
       }
 
+      // Compact panels shrink to their content instead of the fixed
+      // `width` prop — measure the real rendered width so the clamp/arrow
+      // math below lines up with what's actually on screen, same as the
+      // "left" branch already does.
+      const rawWidth = compact ? panel?.offsetWidth || width : width;
       const available = window.innerWidth - VIEWPORT_MARGIN * 2;
-      const effectiveWidth = Math.min(width, available);
+      const effectiveWidth = Math.min(rawWidth, available);
 
       const minLeft = window.scrollX + VIEWPORT_MARGIN;
       const maxLeft = window.scrollX + window.innerWidth - VIEWPORT_MARGIN - effectiveWidth;
@@ -130,7 +150,7 @@ export default function InfoTooltip({
       document.removeEventListener("touchstart", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, width, placement]);
+  }, [open, width, placement, compact]);
 
   function clearCloseTimer() {
     if (closeTimerRef.current) {
@@ -210,8 +230,8 @@ export default function InfoTooltip({
             onPointerLeave={handlePointerLeave}
           >
             <span
-              className={`info-tooltip-arrow ${placement === "left" ? "info-tooltip-arrow-left" : ""}`}
-              style={placement === "left" ? { top: coords.arrowTop } : { left: coords.arrowLeft }}
+              className={`info-tooltip-arrow ${resolvedPlacement === "left" ? "info-tooltip-arrow-left" : ""}`}
+              style={resolvedPlacement === "left" ? { top: coords.arrowTop } : { left: coords.arrowLeft }}
             />
             {children}
           </div>,
