@@ -801,7 +801,7 @@ body {
 }
 
 /* EVENT BAR */
-.event-bar { background: rgba(98, 55, 176, 0.04); border-bottom: 0.5px solid rgba(98, 55, 176, 0.1); padding: 9px 40px; display: flex; align-items: center; gap: 10px; }
+.event-bar { background: rgba(98, 55, 176, 0.04); border-bottom: 1px solid rgba(98, 55, 176, 0.22); padding: 9px 40px; display: flex; align-items: center; gap: 10px; }
 
 /* Dot + eyebrow read as a single status badge now (rounded, tinted,
    bordered) rather than plain small-caps text sitting loose in the bar —
@@ -1740,12 +1740,18 @@ body {
      fighting for space side by side. Long fighter/event names get a full
      line to themselves instead of wrapping awkwardly mid-name in a
      squeezed column. */
+  /* Stronger tint + a soft downward shadow than the desktop bar — on a
+     narrow screen the bar sits directly above the hero's headline with
+     no side-by-side content to help it read as its own region, so the
+     boundary needs to carry more weight on its own. */
   .event-bar {
     padding: 14px 16px;
     display: grid;
     grid-template-columns: 1fr;
     align-items: start;
     gap: 8px;
+    background: rgba(98, 55, 176, 0.08);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   }
 
   /* The pill/chip treatment works on desktop where it sits beside the
