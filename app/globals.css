@@ -1850,9 +1850,15 @@ body {
     width: 160px;
   }
 
+  /* grid-column must match .event-date-line's mobile placement (1 / -1,
+     its own full-width row) — leaving this at the desktop-only "2 / -1"
+     placed it in a phantom second grid column, stranding the skeleton on
+     the right edge while the name skeleton (and every real value once
+     loaded) sits flush left. */
   .event-skeleton-date {
-    grid-column: 2 / -1;
+    grid-column: 1 / -1;
     margin-left: 0;
+    margin-top: 6px;
     width: 140px;
   }
 
