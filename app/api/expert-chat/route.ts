@@ -228,8 +228,11 @@ function buildSystemPrompt(
     `- The data above is already verified by this site — just answer naturally from it, the way a knowledgeable ` +
     `friend would. Don't preface every answer with "based on the data" or similar — that gets repetitive.\n` +
     `- If a question needs something not covered above (e.g. exact strike counts from a past fight, very recent ` +
-    `news), use the web_search tool. When you do, mention it briefly in the answer (e.g. "a quick search shows…") ` +
-    `so it's clear that part came from outside this site — but don't belabor it.\n` +
+    `news), use the web_search tool. Never write a stalling sentence first (e.g. "Let me check on that", ` +
+    `"One moment", "Searching for that…") — just call the tool, then write a single finished answer once you ` +
+    `have the result. Within that answer, mention briefly that part came from outside this site (e.g. "a quick ` +
+    `search shows…") so it's clear where it came from — but fold that into the same sentence as the answer, ` +
+    `don't give it its own sentence, and don't belabor it.\n` +
     `- If a question asks for detailed per-fight stats (e.g. strike counts) across MULTIPLE past fights at once, ` +
     `don't search for all of them in one turn — each one is a separate lookup and doing them sequentially is too ` +
     `slow. Search for and answer just the most recent one, then say you can look up the others too if they want ` +
@@ -330,6 +333,16 @@ export async function POST(request: Request) {
     let usedSearch = false;
     for (const block of response.content) {
       if (block.type === "text") {
+        // A tool-use turn can produce more than one text block (e.g. a
+        // pre-search remark, then the post-search answer) — concatenating
+        // them with nothing in between runs the end of one straight into
+        // the start of the next with no space, e.g. "...that.That's...".
+        // Closing punctuation (a period, comma, closing quote, etc.) is
+        // excluded from getting a preceding space — it belongs hugged
+        // against the previous block, not floating on its own.
+        if (reply && !/\s$/.test(reply) && !/^[\s.,!?;:)\]}"'”’]/.test(block.text)) {
+          reply += " ";
+        }
         reply += block.text;
       } else if (block.type === "server_tool_use" && block.name === "web_search") {
         usedSearch = true;
