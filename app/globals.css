@@ -55,12 +55,12 @@ body {
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 4px;
 }
 
 .nav-logo-img {
-  height: 30px;
-  width: 30px;
+  height: 35px;
+  width: 35px;
   object-fit: contain;
   /* The wordmark's drop-shadow trails down-right past the letters' own
      box, pulling their perceived visual center lower than the logo's —
@@ -1725,8 +1725,8 @@ body {
   }
 
   .nav-logo-img {
-    height: 22px;
-    width: 22px;
+    height: 26px;
+    width: 26px;
   }
 
   .nav-ltr {
