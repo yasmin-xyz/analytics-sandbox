@@ -20,8 +20,8 @@ export default function HomeLogoLink() {
       <Image
         src="/android-chrome-192x192.png"
         alt="Pick'em Labs"
-        width={30}
-        height={30}
+        width={35}
+        height={35}
         className="nav-logo-img"
       />
       <div className="nav-logo-text">
