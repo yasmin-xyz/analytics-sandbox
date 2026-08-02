@@ -1161,7 +1161,7 @@ const statRows = [
                   month: "long",
                   day: "numeric",
                 })}{" "}
-                for {ufcEvent.nextEvent.name}
+                for <em>{ufcEvent.nextEvent.name}</em>
               </>
             ) : (
               "Check back soon for the next event"
