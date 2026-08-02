@@ -2,8 +2,6 @@
 
 A UFC fight analysis and betting insights app. It pulls live fight cards, real fighter stats, and current odds, then runs each matchup through Claude, GPT-4, and Gemini independently for a consensus prediction.
 
-I'm building this to actually learn React and Next.js — not through tutorials, but by wiring up real APIs, dealing with the mess that comes with them, and shipping something people can use.
-
 ## What it does
 
 For every fight on the card:
@@ -30,7 +28,7 @@ For every fight on the card:
 | Testing | Vitest, providers mocked |
 | Deployed on | Vercel |
 
-## Handling messy real-world data
+## Handling real-world data
 
 - Cito covers UFC results but not much else, so a fighter fresh into the UFC often has little history there — Sherdog fills in the pre-UFC and regional fights, deduped against whatever Cito already has.
 - Matching fighter names between ESPN's card and the odds provider's market names isn't always clean (nicknames, spelling, suffixes), so there's a surname-based fallback instead of just showing no odds.
