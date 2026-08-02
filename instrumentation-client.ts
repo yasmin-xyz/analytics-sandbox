@@ -16,5 +16,11 @@ if (!token) {
     defaults: "2026-01-30",
     capture_exceptions: true,
     debug: process.env.NODE_ENV === "development",
+    session_recording: {
+      maskAllInputs: false,
+      maskInputOptions: {
+        password: true, // Keep this masked!
+      },
+    },
   });
 }
