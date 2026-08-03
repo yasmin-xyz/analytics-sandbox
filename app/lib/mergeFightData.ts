@@ -32,9 +32,20 @@ function normalizeForOddsMatch(name: string): string {
 // (a missing/extra middle name, a nickname vs. formal given name like
 // "Steve"/"Stephen" or "Ramazan"/"Ramazonbek", a transliteration split
 // like "Seokhyeon"/"Seok Hyun") has left the surname untouched.
-function surname(normalizedName: string): string {
+//
+// A multi-word surname (e.g. "del Valle") is sometimes concatenated into
+// one word by another provider ("DelValle") — return that joined form as
+// a second candidate so either spelling matches. Only attempted at 3+
+// parts, since with exactly 2 (given name + surname) the last word is
+// already the whole surname and there's nothing to join.
+function surnameCandidates(normalizedName: string): string[] {
   const parts = normalizedName.split(" ");
-  return parts[parts.length - 1] || "";
+  const last = parts[parts.length - 1] || "";
+  const candidates = [last];
+  if (parts.length > 2) {
+    candidates.push(parts.slice(-2).join(""));
+  }
+  return candidates;
 }
 
 // The-odds-api returns bookmakers in whatever order it feels like, which
@@ -91,16 +102,17 @@ export function mergeFightData(
       // more than one odds entry satisfies the pair, treat it as
       // unresolved rather than guess.
       if (!oddsMatch) {
-        const surnameA = surname(normA);
-        const surnameB = surname(normB);
+        const surnamesA = surnameCandidates(normA);
+        const surnamesB = surnameCandidates(normB);
 
         const candidates = oddsFights.filter((oddsFight) => {
-          const surnames = [
-            surname(normalizeForOddsMatch(oddsFight.home_team)),
-            surname(normalizeForOddsMatch(oddsFight.away_team)),
-          ];
+          const homeSurnames = surnameCandidates(normalizeForOddsMatch(oddsFight.home_team));
+          const awaySurnames = surnameCandidates(normalizeForOddsMatch(oddsFight.away_team));
 
-          return surnames.includes(surnameA) && surnames.includes(surnameB);
+          const hasA = surnamesA.some((s) => homeSurnames.includes(s) || awaySurnames.includes(s));
+          const hasB = surnamesB.some((s) => homeSurnames.includes(s) || awaySurnames.includes(s));
+
+          return hasA && hasB;
         });
 
         if (candidates.length === 1) {
@@ -135,10 +147,10 @@ export function mergeFightData(
       let fighterBOutcomeName: string | null = null;
 
       if (oddsMatch) {
-        const surnameA = surname(normA);
-        const homeSurname = surname(normalizeForOddsMatch(oddsMatch.home_team));
+        const surnamesA = surnameCandidates(normA);
+        const homeSurnames = surnameCandidates(normalizeForOddsMatch(oddsMatch.home_team));
 
-        if (homeSurname === surnameA) {
+        if (surnamesA.some((s) => homeSurnames.includes(s))) {
           fighterAOutcomeName = oddsMatch.home_team;
           fighterBOutcomeName = oddsMatch.away_team;
         } else {
