@@ -1620,7 +1620,7 @@ const statRows = [
           <div className="prediction-details-grid">
           <div className="value-card prediction-method">
               <div className="cons-eyebrow">Method</div>
-              <div className="pred-name">{prediction.claude?.method || "—"}</div>
+              <div className="pred-name">{prediction.consensus?.method || "—"}</div>
             </div>
 
             <div className="value-card prediction-round">
@@ -1632,8 +1632,8 @@ const statRows = [
               </div>
               <div className="pred-name">
   {formatPredictedRound(
-    prediction?.claude?.method,
-    prediction?.claude?.round
+    prediction?.consensus?.method,
+    prediction?.consensus?.round
   )}
 </div>
             </div>
