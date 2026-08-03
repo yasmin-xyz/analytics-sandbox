@@ -2,6 +2,8 @@
 
 A UFC fight analysis and betting insights app. It pulls live fight cards, real fighter stats, and current odds, then runs each matchup through Claude, GPT-4, and Gemini independently for a consensus prediction.
 
+**Live app:** [pickemlabs.com](https://www.pickemlabs.com/)
+
 ## What it does
 
 For every fight on the card:
