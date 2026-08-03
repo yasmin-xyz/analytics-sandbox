@@ -467,11 +467,24 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
   }
 
   // Single coordinated data-loading operation for a fight selection: fetch
-  // both ESPN profiles and both Cito/Supabase metric records for the exact
-  // fighters in `fight`, validate the ESPN data against the requested
-  // names, then hand everything to fetchPrediction as explicit arguments.
-  // The prediction request never starts until this has resolved.
-  async function loadPredictionData(fight: any) {
+  // ESPN profiles for the exact fighters in `fight`, validate against the
+  // requested names, then hand everything to fetchPrediction as explicit
+  // arguments. metricsA/metricsB/historyA/historyB are NOT fetched here —
+  // callers must pass the SETTLED result of the fighter-metrics poll (see
+  // fetchFighterMetricsAndHistory below). Generating a prediction from a
+  // mid-poll snapshot previously let the AI reason about a fighter's
+  // finishing tendency using empty history simply because Cito hadn't
+  // synced yet by the time the very first request fired — and that blind
+  // guess then got cached as "complete" forever, since /api/predict's
+  // cache only checks that all 3 models responded, not that they had real
+  // data to work with.
+  async function loadPredictionData(
+    fight: any,
+    metricsA: any,
+    metricsB: any,
+    historyA: any[],
+    historyB: any[]
+  ) {
     if (!fight?.fighterA || !fight?.fighterB) return;
 
     const requestId = ++requestIdRef.current;
@@ -481,30 +494,23 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
     setPredictionError(false);
 
     try {
-      const [statsAResult, statsBResult, metricsResult] = await Promise.allSettled([
+      const [statsAResult, statsBResult] = await Promise.allSettled([
         fight.fighterAId
           ? fetch(`/api/fighter-stats?id=${fight.fighterAId}`).then((r) => (r.ok ? r.json() : null))
           : Promise.resolve(null),
         fight.fighterBId
           ? fetch(`/api/fighter-stats?id=${fight.fighterBId}`).then((r) => (r.ok ? r.json() : null))
           : Promise.resolve(null),
-        fetch("/api/fighter-metrics", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ names: [fight.fighterA, fight.fighterB] }),
-        }).then((r) => (r.ok ? r.json() : null)),
       ]);
 
       if (requestId !== requestIdRef.current) return;
 
       const rawStatsA = statsAResult.status === "fulfilled" ? statsAResult.value : null;
       const rawStatsB = statsBResult.status === "fulfilled" ? statsBResult.value : null;
-      const metricsData = metricsResult.status === "fulfilled" ? metricsResult.value : null;
 
       // ESPN bio data is supplementary — if it doesn't belong to the
       // requested fighter, drop it rather than risk feeding it in under
-      // the wrong name. Cito/Supabase metrics are already correctly keyed
-      // by name in the response itself, so no separate check is needed.
+      // the wrong name.
       const statsA = rawStatsA?.name && namesMatchExactly(rawStatsA.name, fight.fighterA) ? rawStatsA : null;
       const statsB = rawStatsB?.name && namesMatchExactly(rawStatsB.name, fight.fighterB) ? rawStatsB : null;
 
@@ -514,11 +520,6 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
       if (rawStatsB && !statsB) {
         console.warn(`ESPN stats name mismatch: expected "${fight.fighterB}", got "${rawStatsB?.name}"`);
       }
-
-      const metricsA = metricsData?.metrics?.[fight.fighterA] || {};
-      const metricsB = metricsData?.metrics?.[fight.fighterB] || {};
-      const historyA = metricsData?.history?.[fight.fighterA] || [];
-      const historyB = metricsData?.history?.[fight.fighterB] || [];
 
       await fetchPrediction(fight, statsA, statsB, metricsA, metricsB, historyA, historyB, requestId);
     } catch (error) {
@@ -531,11 +532,13 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
     }
   }
 
-  // Single entry point for every fight-selection call site, so the
-  // coordinated data-load + prediction pipeline always runs the same way.
+  // Single entry point for every fight-selection call site. Setting
+  // selectedFight triggers the fighter-metrics poll effect below, which
+  // kicks off the prediction itself once that poll settles — see
+  // loadPredictionData's comment for why the prediction waits rather than
+  // firing here immediately.
   function selectFight(fight: any) {
     setSelectedFight(fight);
-    loadPredictionData(fight);
   }
 
   // The browser restores the previous scroll position on reload by
@@ -788,6 +791,16 @@ selectFight(defaultFight);
         metricsPollTimerRef.current = setTimeout(() => {
           fetchFighterMetricsAndHistory(fight, requestId, startedAt, true);
         }, METRICS_POLL_INTERVAL_MS);
+      } else {
+        // Settled (synced or gave up after the poll window) — this is the
+        // best data we're going to get, so generate the AI prediction now.
+        loadPredictionData(
+          fight,
+          data.metrics?.[fight.fighterA] || {},
+          data.metrics?.[fight.fighterB] || {},
+          data.history?.[fight.fighterA] || [],
+          data.history?.[fight.fighterB] || []
+        );
       }
     } catch (error) {
       console.error("Failed loading fighter metrics/history", error);
@@ -808,6 +821,8 @@ selectFight(defaultFight);
         setFighterAHistoryState("");
         setFighterBHistoryState("");
         setHistoryStatus("error");
+
+        loadPredictionData(fight, {}, {}, [], []);
         return;
       }
 
@@ -1557,7 +1572,7 @@ const statRows = [
                 fighter_a: selectedFight?.fighterA,
                 fighter_b: selectedFight?.fighterB,
               });
-              loadPredictionData(selectedFight);
+              loadPredictionData(selectedFight, fighterAMetrics, fighterBMetrics, fighterAHistory, fighterBHistory);
             }}>
             Retry
           </button>
