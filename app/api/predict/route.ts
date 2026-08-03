@@ -200,7 +200,12 @@ function validatePredictBody(raw: unknown) {
 // on who's favored, medianing raw odds numbers can straddle the invalid
 // -100..+100 gap and land on a nonsense quote (e.g. -2, implying ~2%
 // instead of ~50%).
-const PREDICTION_VERSION = "v9-probability-median";
+// v10 adds consensus.method/round, resolved from a model that actually
+// picked the consensus winner — the UI was previously always showing
+// Claude's own method/round even when Claude dissented from the consensus
+// pick, displaying a finish scenario for the fighter who didn't win the
+// vote.
+const PREDICTION_VERSION = "v10-consensus-method-round";
 
 function createFightKey(fighterA: string, fighterB: string) {
   const matchup = [fighterA, fighterB].sort().join(" vs ");
@@ -654,12 +659,16 @@ export async function POST(request: Request) {
     let agreeingModels: string[];
     let consensusConfidence: number;
     let modelAgreement: string;
+    let consensusMethod: string | undefined;
+    let consensusRound: string | undefined;
 
     if (totalSuccessfulModels === 0) {
       consensusWinner = fighterA;
       agreeingModels = [];
       consensusConfidence = 50;
       modelAgreement = "No models available";
+      consensusMethod = undefined;
+      consensusRound = undefined;
     } else {
       const winnerCounts: Record<string, number> = {};
       for (const { prediction } of modelResults) {
@@ -696,6 +705,16 @@ export async function POST(request: Request) {
           : tiedWinners.length > 1
           ? "Split"
           : "Majority";
+
+      // Method/round must come from a model that actually picked the
+      // consensus winner — a dissenting model's method/round describes ITS
+      // pick, which may be a different fighter entirely. Prefer Claude's
+      // when Claude agrees (matches prior display behavior for the common
+      // case), otherwise fall back to whichever agreeing model comes first.
+      const primaryAgreeingModel =
+        agreeing.find(({ name }) => name === "claude") || agreeing[0];
+      consensusMethod = primaryAgreeingModel.prediction.method;
+      consensusRound = primaryAgreeingModel.prediction.round;
     }
 
     const overUnder =
@@ -720,6 +739,8 @@ export async function POST(request: Request) {
         totalSuccessfulModels,
         modelAgreement,
         overUnder,
+        method: consensusMethod,
+        round: consensusRound,
       },
     };
 
