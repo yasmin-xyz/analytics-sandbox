@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import HomeLogoLink from "../components/HomeLogoLink";
 import Dropdown from "../components/Dropdown";
+import posthog from "posthog-js";
 
 const CATEGORIES = ["Bug report", "Feature request", "General feedback"];
 
@@ -13,18 +14,63 @@ export default function FeedbackPage() {
   const [email, setEmail] = useState("");
   const [category, setCategory] = useState("General feedback");
   const [message, setMessage] = useState("");
+  const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!message.trim()) {
       setError("Please enter a message before submitting.");
       return;
     }
     setError("");
-    console.log({ name, email, category, message });
-    setSubmitted(true);
+    setSubmitting(true);
+
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim() || undefined,
+          email: email.trim() || undefined,
+          category,
+          message: message.trim(),
+          website,
+        }),
+      });
+
+      if (res.status === 429) {
+        setError("You've submitted a lot of feedback — try again in a few minutes.");
+        return;
+      }
+      if (!res.ok) {
+        setError("Something went wrong submitting that. Try again in a moment.");
+        return;
+      }
+
+      // Feedback is the first moment we know who this visitor actually is —
+      // identify() merges everything they did anonymously before this
+      // (page views, prior events, this session's recording) onto one
+      // Person profile keyed by email instead of the anonymous device id.
+      if (email.trim()) {
+        posthog.identify(email.trim(), {
+          email: email.trim(),
+          name: name.trim() || undefined,
+        });
+      }
+
+      posthog.capture("feedback_submitted", {
+        category,
+        message_length: message.trim().length,
+      });
+      setSubmitted(true);
+    } catch {
+      setError("Something went wrong submitting that. Try again in a moment.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -54,6 +100,17 @@ export default function FeedbackPage() {
           </div>
         ) : (
           <form className="feedback-form" onSubmit={handleSubmit}>
+            <input
+              type="text"
+              className="form-honeypot"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              name="website"
+            />
+
             <div className="form-group">
               <label className="form-label" htmlFor="name">
                 Name <span className="form-label-optional">(optional)</span>
@@ -111,8 +168,8 @@ export default function FeedbackPage() {
 
             {error && <div className="form-error">{error}</div>}
 
-            <button type="submit" className="form-submit">
-              Submit feedback
+            <button type="submit" className="form-submit" disabled={submitting}>
+              {submitting ? "Submitting…" : "Submit feedback"}
             </button>
           </form>
         )}

@@ -76,6 +76,20 @@ export function assertLooseScalar(value: unknown, field: string, maxLength = 300
   throw new ValidationError(`${field} must be a string or number`);
 }
 
+// Shared honeypot check for public-facing forms (feedback, notify-signup):
+// a field real users never see or fill (kept off-screen via .form-honeypot
+// in globals.css) but simple bots fill indiscriminately. Deliberately
+// indistinguishable from success on the caller's end — the route should
+// still return its normal 200 rather than a 400, so a bot never learns
+// which signal tripped it.
+export class SpamDetected extends Error {}
+
+export function assertHoneypotEmpty(value: unknown): void {
+  if (typeof value === "string" && value.trim().length > 0) {
+    throw new SpamDetected("honeypot field was filled");
+  }
+}
+
 export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
