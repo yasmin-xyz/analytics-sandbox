@@ -391,53 +391,81 @@ const [mergedFights, setMergedFights] = useState<any[]>([]);
     );
 
     try {
-      const res = await fetch("/api/predict", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fighterA: fight.fighterA,
-          fighterB: fight.fighterB,
-          oddsA: medianOddsA || 0,
-          oddsB: medianOddsB || 0,
-          eventName: ufcEvent?.eventName || null,
+      const body = JSON.stringify({
+        fighterA: fight.fighterA,
+        fighterB: fight.fighterB,
+        oddsA: medianOddsA || 0,
+        oddsB: medianOddsB || 0,
+        eventName: ufcEvent?.eventName || null,
 
-          fighterAStats: fighterAStatsArg,
-          fighterBStats: fighterBStatsArg,
+        fighterAStats: fighterAStatsArg,
+        fighterBStats: fighterBStatsArg,
 
-          fighterAMetrics: fighterAMetricsArg,
-          fighterBMetrics: fighterBMetricsArg,
+        fighterAMetrics: fighterAMetricsArg,
+        fighterBMetrics: fighterBMetricsArg,
 
-          // Picked down to exactly what the server's validator allows —
-          // the raw history objects may carry extra fields it doesn't
-          // know about.
-          fighterAHistory: (fighterAHistoryArg || []).slice(0, 5).map((f: any) => ({
-            opponent: f.opponent, result: f.result, method: f.method, round: f.round, time: f.time, event: f.event, date: f.date,
-          })),
-          fighterBHistory: (fighterBHistoryArg || []).slice(0, 5).map((f: any) => ({
-            opponent: f.opponent, result: f.result, method: f.method, round: f.round, time: f.time, event: f.event, date: f.date,
-          })),
+        // Picked down to exactly what the server's validator allows —
+        // the raw history objects may carry extra fields it doesn't
+        // know about.
+        fighterAHistory: (fighterAHistoryArg || []).slice(0, 5).map((f: any) => ({
+          opponent: f.opponent, result: f.result, method: f.method, round: f.round, time: f.time, event: f.event, date: f.date,
+        })),
+        fighterBHistory: (fighterBHistoryArg || []).slice(0, 5).map((f: any) => ({
+          opponent: f.opponent, result: f.result, method: f.method, round: f.round, time: f.time, event: f.event, date: f.date,
+        })),
 
-          // Explicit source tags so the server can verify these metrics
-          // objects actually belong to the fighters named above, instead
-          // of trusting the client's bundling.
-          fighterAMetricsSource: fight.fighterA,
-          fighterBMetricsSource: fight.fighterB,
-        }),
+        // Explicit source tags so the server can verify these metrics
+        // objects actually belong to the fighters named above, instead
+        // of trusting the client's bundling.
+        fighterAMetricsSource: fight.fighterA,
+        fighterBMetricsSource: fight.fighterB,
       });
 
-      if (!res.ok) {
-        const errorBody = await res.json().catch(() => null);
-        throw new Error(errorBody?.error || `Request failed (${res.status})`);
-      }
+      const attempt = async () => {
+        const res = await fetch("/api/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
 
-      const data = await res.json();
+        if (!res.ok) {
+          const errorBody = await res.json().catch(() => null);
+          throw new Error(errorBody?.error || `Request failed (${res.status})`);
+        }
+
+        const data = await res.json();
+
+        if (!data || (!data.claude && !data.gpt && !data.gemini)) {
+          throw new Error("Prediction response was empty");
+        }
+
+        return data;
+      };
+
+      let data;
+      try {
+        data = await attempt();
+      } catch (error) {
+        // fetch() itself throws a TypeError when the request fails at the
+        // network level, before any response comes back (Safari: "Load
+        // failed", Chrome: "Failed to fetch") — as opposed to the Error
+        // instances thrown above for a real HTTP failure or an empty
+        // response. That distinction matters: a TypeError is almost always
+        // a transient blip (tab backgrounded, brief connectivity drop),
+        // and one quiet retry recovers most of them before the visitor
+        // ever sees a failure state. Retrying a genuine server error or
+        // empty response, by contrast, would just waste a second paid LLM
+        // call for a failure that won't resolve itself.
+        if (!(error instanceof TypeError) || requestId !== requestIdRef.current) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (requestId !== requestIdRef.current) return;
+        data = await attempt();
+      }
 
       if (requestId !== requestIdRef.current) {
         return;
-      }
-
-      if (!data || (!data.claude && !data.gpt && !data.gemini)) {
-        throw new Error("Prediction response was empty");
       }
 
       setPrediction(data);
