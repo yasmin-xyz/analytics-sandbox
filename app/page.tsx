@@ -747,13 +747,28 @@ selectFight(defaultFight);
     loadRankings();
   }, []);
 
+  // ESPN abbreviates women's divisions ("W Strawweight") while ufc.com's
+  // rankings — the source getFighterRank looks up below — use the full
+  // name ("Women's Strawweight"). Without this, the key lookup misses for
+  // every fight in every women's division, silently hiding rank/champion
+  // badges for all of them, not just one fighter.
+  function rankingsDivisionKeys(weightClass: string): string[] {
+    const keys = [weightClass];
+    if (weightClass.startsWith("W ")) {
+      keys.push(`Women's ${weightClass.slice(2)}`);
+    }
+    return keys;
+  }
+
   // Matches a fighter's display name against ufc.com's rankings for
   // their division by name (like the Cito/Sherdog lookups elsewhere in
   // this file) rather than a shared id — ufc.com doesn't expose one.
   function getFighterRank(weightClass: string | undefined, fighterName: string | undefined) {
     if (!weightClass || !fighterName) return null;
 
-    const division = rankings[weightClass];
+    const division = rankingsDivisionKeys(weightClass)
+      .map((key) => rankings[key])
+      .find(Boolean);
     if (!division) return null;
 
     if (division.champion && namesMatchExactly(division.champion, fighterName)) {
