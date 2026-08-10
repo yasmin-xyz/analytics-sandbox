@@ -46,19 +46,42 @@ export type UfcEvent = {
   nextEvent: UfcEventNext | null;
 };
 
+// Dana White's Contender Series is a separate prospect-tryout show — not
+// a numbered UFC card or Fight Night — but ESPN's calendar/scoreboard
+// lists it in the same "Ultimate Fighting Championship" league feed,
+// interspersed weekly with real UFC events. This app only ever wants the
+// latter.
+function isContenderSeries(name: string | undefined): boolean {
+  return typeof name === "string" && name.toLowerCase().includes("contender series");
+}
+
+// A calendar entry's startDate is a bucket boundary (e.g. midnight UTC on
+// the listed day), not the event's actual start time — ESPN's real event
+// date/time can land on the day before or after it. Querying that exact
+// day can come back empty, so this builds a day-before/day-after range
+// instead, wide enough to always contain the real event.
+function toEspnDateParam(isoDate: string, offsetDays: number): string {
+  const d = new Date(isoDate);
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
 // ESPN's scoreboard "events[0]" keeps returning the just-concluded event
 // for a while after it ends (status.type.completed flips true, but it
 // doesn't roll over to the next event immediately) — this looks up the
 // following entry in the league's own forward calendar, keyed by name,
-// rather than guessing or hardcoding a date.
+// rather than guessing or hardcoding a date. Skips past any Contender
+// Series entries so "next event" always points at a real UFC card.
 function findNextEvent(calendar: any[] | undefined, currentEventName: string): UfcEventNext | null {
   if (!Array.isArray(calendar)) return null;
 
   const idx = calendar.findIndex((entry) => entry?.label === currentEventName);
   if (idx === -1) return null;
 
-  const next = calendar[idx + 1];
-  if (!next?.label || !next?.startDate) return null;
+  const next = calendar
+    .slice(idx + 1)
+    .find((entry) => entry?.label && entry?.startDate && !isContenderSeries(entry.label));
+  if (!next) return null;
 
   return { name: next.label, date: next.startDate };
 }
@@ -72,7 +95,31 @@ async function fetchCurrentUfcEventUncached(): Promise<UfcEvent | null> {
   );
 
   const data = await res.json();
-  const event = data.events?.[0];
+  let event = data.events?.[0];
+  const calendar = data.leagues?.[0]?.calendar;
+
+  // events[0] is whatever's chronologically next in the league feed,
+  // which can land on a Contender Series week — walk the calendar
+  // forward to the next real UFC card and fetch that date instead.
+  if (event && isContenderSeries(event.name) && Array.isArray(calendar)) {
+    const currentIdx = calendar.findIndex((entry) => entry?.label === event.name);
+    const nextMainline = calendar
+      .slice(currentIdx === -1 ? 0 : currentIdx + 1)
+      .find((entry) => entry?.label && entry?.startDate && !isContenderSeries(entry.label));
+
+    if (nextMainline?.startDate) {
+      const dateParam = `${toEspnDateParam(nextMainline.startDate, -1)}-${toEspnDateParam(nextMainline.startDate, 1)}`;
+      const mainlineRes = await fetch(
+        `https://site.api.espn.com/apis/site/v2/sports/mma/ufc/scoreboard?dates=${dateParam}`,
+        { cache: "no-store" }
+      );
+      const mainlineData = await mainlineRes.json();
+      const mainlineEvent = mainlineData.events?.find((e: any) => e?.name === nextMainline.label);
+      if (mainlineEvent) {
+        event = mainlineEvent;
+      }
+    }
+  }
 
   if (!event) return null;
 
@@ -101,9 +148,7 @@ async function fetchCurrentUfcEventUncached(): Promise<UfcEvent | null> {
 
   const completed = event.status?.type?.completed === true;
   const isLive = event.status?.type?.state === "in";
-  const nextEvent = completed
-    ? findNextEvent(data.leagues?.[0]?.calendar, event.name)
-    : null;
+  const nextEvent = completed ? findNextEvent(calendar, event.name) : null;
 
   const venueAddress = event.competitions?.[0]?.venue?.address || event.venue?.address;
 
